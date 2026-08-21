@@ -2,18 +2,28 @@
 // with a Tier-1 VC is denied a Tier-3 tool call; a Tier-3 VC is allowed."
 // Needs a real Postgres (see .env / DATABASE_URL) -- this is the one test
 // file that exercises the actual DB-backed grant/revoke lifecycle, not
-// just the cryptography.
+// just the cryptography (see test/vc.test.ts for that).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../src/db/pool.js";
-import { veramoAgent } from "../src/identity/veramoAgent.js";
+import { didWebForAgent } from "../src/identity/did.js";
+import { deleteKeyPair, generateAndStoreKeyPair } from "../src/identity/keys.js";
 import { issueCapabilityGrant, revokeCapabilityGrant, verifyPresentedCapability } from "../src/identity/capabilities.js";
+import { issueCapabilityGrantJwt, verifyCapabilityGrantJwt } from "../src/identity/vc.js";
 
 let issuerDid: string;
 let issuerNodeId: string;
+const subjectDids: string[] = [];
+
+async function newSubjectDid(label: string): Promise<string> {
+  const did = didWebForAgent("id.dcentral-fieldops.test", label);
+  subjectDids.push(did);
+  await generateAndStoreKeyPair(did);
+  return did;
+}
 
 beforeAll(async () => {
-  const issuer = await veramoAgent.didManagerCreate({ provider: "did:key" });
-  issuerDid = issuer.did;
+  issuerDid = didWebForAgent("id.dcentral-fieldops.test", "capabilities-test-issuer");
+  await generateAndStoreKeyPair(issuerDid);
   // is_self stays false -- this is an arbitrary test-fixture node, not the
   // one real "this deployment's own identity" row, which nodes_single_self_idx
   // enforces as a global singleton across every test file sharing this DB.
@@ -28,16 +38,18 @@ afterAll(async () => {
   await pool.query("DELETE FROM capability_grants WHERE issuer_node_id = $1", [issuerNodeId]);
   await pool.query("DELETE FROM verifiable_credentials WHERE issuer_did = $1", [issuerDid]);
   await pool.query("DELETE FROM nodes WHERE id = $1", [issuerNodeId]);
+  await deleteKeyPair(issuerDid);
+  for (const did of subjectDids) await deleteKeyPair(did);
   await pool.end();
 });
 
 describe("capability grant issue -> verify -> revoke lifecycle", () => {
   it("allows a call at or below the granted tier, denies above it", async () => {
-    const subject = await veramoAgent.didManagerCreate({ provider: "did:key" });
+    const subjectDid = await newSubjectDid("subject-1");
     const { jwt } = await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:test-tool",
       tier: 3,
     });
@@ -54,11 +66,11 @@ describe("capability grant issue -> verify -> revoke lifecycle", () => {
   });
 
   it("denies a grant for the wrong capability name", async () => {
-    const subject = await veramoAgent.didManagerCreate({ provider: "did:key" });
+    const subjectDid = await newSubjectDid("subject-2");
     const { jwt } = await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:only-this-one",
       tier: 3,
     });
@@ -68,12 +80,12 @@ describe("capability grant issue -> verify -> revoke lifecycle", () => {
     if (!result.allowed) expect(result.reason).toBe("wrong_capability");
   });
 
-  it("denies a revoked grant even though the underlying VC is still cryptographically valid", async () => {
-    const subject = await veramoAgent.didManagerCreate({ provider: "did:key" });
+  it("denies a revoked grant even though the underlying JWT is still cryptographically valid", async () => {
+    const subjectDid = await newSubjectDid("subject-3");
     const { jwt, grantId } = await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:revocable",
       tier: 2,
     });
@@ -88,25 +100,22 @@ describe("capability grant issue -> verify -> revoke lifecycle", () => {
 
     // The signature itself is still perfectly valid -- confirms revocation
     // is genuinely a DB-side concept, not something the JWT can express.
-    const rawVerify = await veramoAgent.verifyCredential({ credential: jwt as unknown as never });
-    expect(rawVerify.verified).toBe(true);
+    const rawVerify = await verifyCapabilityGrantJwt(jwt);
+    expect(rawVerify.ok).toBe(true);
   });
 
   it("denies an unissued/unknown credential", async () => {
-    const subject = await veramoAgent.didManagerCreate({ provider: "did:key" });
-    // A well-formed VC signed by a real issuer, but never inserted into
-    // capability_grants -- simulates a JWT that was never actually granted
-    // through issueCapabilityGrant (e.g. a forged claim about a real DID).
-    const vc = await veramoAgent.createVerifiableCredential({
-      proofFormat: "jwt",
-      credential: {
-        issuer: { id: issuerDid },
-        credentialSubject: { id: subject.did, capability: "mcp:tool:test-tool", tier: 4 },
-        type: ["VerifiableCredential", "CapabilityGrant"],
-        issuanceDate: new Date().toISOString(),
-      },
+    const subjectDid = await newSubjectDid("subject-4");
+    // A well-formed, genuinely-signed JWT-VC, but never inserted into
+    // capability_grants via issueCapabilityGrant -- simulates a forged
+    // claim about a real DID (issued with the real key, just never
+    // actually recorded as a granted capability).
+    const jwt = await issueCapabilityGrantJwt({
+      issuerDid,
+      subjectDid,
+      capability: "mcp:tool:test-tool",
+      tier: 4,
     });
-    const jwt = typeof vc.proof.jwt === "string" ? vc.proof.jwt : String(vc.proof.jwt);
 
     const result = await verifyPresentedCapability(jwt, "mcp:tool:test-tool", 1);
     expect(result.allowed).toBe(false);

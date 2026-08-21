@@ -10,17 +10,26 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { pool } from "../src/db/pool.js";
-import { veramoAgent } from "../src/identity/veramoAgent.js";
+import { didWebForAgent } from "../src/identity/did.js";
+import { deleteKeyPair, generateAndStoreKeyPair } from "../src/identity/keys.js";
 import { issueCapabilityGrant } from "../src/identity/capabilities.js";
 import { mcpServer } from "../src/mcp/server.js";
 
 let issuerDid: string;
 let issuerNodeId: string;
 let client: Client;
+const subjectDids: string[] = [];
+
+async function newSubjectDid(label: string): Promise<string> {
+  const did = didWebForAgent("id.dcentral-fieldops.test", label);
+  subjectDids.push(did);
+  await generateAndStoreKeyPair(did);
+  return did;
+}
 
 beforeAll(async () => {
-  const issuer = await veramoAgent.didManagerCreate({ provider: "did:key" });
-  issuerDid = issuer.did;
+  issuerDid = didWebForAgent("id.dcentral-fieldops.test", "mcp-test-issuer");
+  await generateAndStoreKeyPair(issuerDid);
   // is_self stays false -- same reasoning as capabilities.test.ts: this is
   // an arbitrary test-fixture node, and nodes_single_self_idx enforces the
   // real self-node as a global singleton across every file sharing this DB.
@@ -37,18 +46,20 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pool.query("DELETE FROM capability_grants WHERE issuer_node_id = $1", [issuerNodeId]);
-  await pool.query("DELETE FROM verifiable_credentials WHERE issuer_did = $1", [issuerNodeId ? issuerDid : ""]);
+  await pool.query("DELETE FROM verifiable_credentials WHERE issuer_did = $1", [issuerDid]);
   await pool.query("DELETE FROM nodes WHERE id = $1", [issuerNodeId]);
+  await deleteKeyPair(issuerDid);
+  for (const did of subjectDids) await deleteKeyPair(did);
   await pool.end();
 });
 
 describe("whoami / list_capabilities over MCP (InMemoryTransport)", () => {
   it("allows whoami for a caller holding tier 0+", async () => {
-    const subject = await veramoAgent.didManagerCreate({ provider: "did:key" });
+    const subjectDid = await newSubjectDid("mcp-subject-1");
     const { jwt } = await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:whoami",
       tier: 0,
     });
@@ -56,16 +67,16 @@ describe("whoami / list_capabilities over MCP (InMemoryTransport)", () => {
     const result = await client.callTool({ name: "whoami", arguments: { credentialJwt: jwt } });
     expect(result.isError).toBeFalsy();
     const text = (result.content as { type: string; text: string }[])[0]?.text ?? "";
-    expect(JSON.parse(text).did).toBe(subject.did);
+    expect(JSON.parse(text).did).toBe(subjectDid);
   });
 
   it("denies whoami for a caller with no grant at all", async () => {
-    const subject = await veramoAgent.didManagerCreate({ provider: "did:key" });
+    const subjectDid = await newSubjectDid("mcp-subject-2");
     // A credential for a *different* capability, never for mcp:tool:whoami.
     const { jwt } = await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:something-unrelated",
       tier: 4,
     });
@@ -75,18 +86,18 @@ describe("whoami / list_capabilities over MCP (InMemoryTransport)", () => {
   });
 
   it("list_capabilities returns exactly the grants held by the caller's own DID", async () => {
-    const subject = await veramoAgent.didManagerCreate({ provider: "did:key" });
+    const subjectDid = await newSubjectDid("mcp-subject-3");
     await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:list_capabilities",
       tier: 0,
     });
     await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:some-other-thing",
       tier: 2,
     });
@@ -95,7 +106,7 @@ describe("whoami / list_capabilities over MCP (InMemoryTransport)", () => {
     const { jwt: presented } = await issueCapabilityGrant({
       issuerDid,
       issuerNodeId,
-      subjectDid: subject.did,
+      subjectDid,
       capability: "mcp:tool:list_capabilities",
       tier: 0,
     });

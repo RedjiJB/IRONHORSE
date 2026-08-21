@@ -1,12 +1,15 @@
-// Issuing and verifying "CapabilityGrant" VCs -- the cryptographic half of
-// the capability-tier authorization model (see docs/ARCHITECTURE.md). The
-// pool.query calls maintain the queryable capability_grants index
-// alongside the raw signed VC in verifiable_credentials (see
+// Issuing and verifying "CapabilityGrant" credentials -- the cryptographic
+// half of the capability-tier authorization model (see
+// docs/ARCHITECTURE.md). The pool.query calls maintain the queryable
+// capability_grants index alongside the raw signed JWT in
+// verifiable_credentials (see
 // src/db/migrations/0002_credentials_and_capabilities.sql for why both
-// tables exist and which one is actually trusted).
-import type { VerifiableCredential } from "@veramo/core-types";
+// tables exist and which one is actually trusted). All cryptography and
+// DID resolution live in vc.ts/did.ts -- this file owns only the
+// authorization policy: what a given claim is allowed to do once it's
+// been proven genuine.
 import { pool } from "../db/pool.js";
-import { veramoAgent } from "./veramoAgent.js";
+import { issueCapabilityGrantJwt, verifyCapabilityGrantJwt } from "./vc.js";
 
 export type CapabilityTier = 0 | 1 | 2 | 3 | 4;
 
@@ -25,22 +28,7 @@ export async function issueCapabilityGrant(args: IssueCapabilityGrantArgs): Prom
   jwt: string;
 }> {
   const issuedAt = new Date();
-  const vc = await veramoAgent.createVerifiableCredential({
-    proofFormat: "jwt",
-    credential: {
-      issuer: { id: args.issuerDid },
-      credentialSubject: {
-        id: args.subjectDid,
-        capability: args.capability,
-        tier: args.tier,
-      },
-      type: ["VerifiableCredential", "CapabilityGrant"],
-      issuanceDate: issuedAt.toISOString(),
-      ...(args.expiresAt ? { expirationDate: args.expiresAt.toISOString() } : {}),
-    },
-  });
-
-  const jwt = typeof vc.proof.jwt === "string" ? vc.proof.jwt : String(vc.proof.jwt);
+  const jwt = await issueCapabilityGrantJwt(args);
 
   const client = await pool.connect();
   try {
@@ -73,16 +61,16 @@ export type CapabilityCheckResult =
   | { allowed: true; tier: CapabilityTier; subjectDid: string }
   | {
       allowed: false;
-      reason: "signature_invalid" | "wrong_credential_type" | "not_found_or_revoked" | "expired" | "wrong_capability" | "insufficient_tier";
+      reason: "signature_invalid" | "wrong_credential_type" | "not_found_or_revoked" | "expired" | "wrong_capability" | "insufficient_tier" | "malformed" | "unknown_issuer";
     };
 
 // The actual authorization check the MCP capability-tier middleware calls
 // before allowing a gated tool invocation. The caller presents their own
-// CapabilityGrant VC (as a tool argument -- see src/mcp/middleware.ts for
+// CapabilityGrant JWT (as a tool argument -- see src/mcp/middleware.ts for
 // why this is argument-based rather than HTTP-bearer-only: it has to work
 // identically over stdio, which has no HTTP layer to carry a bearer token).
 //
-// Verification order matters: cryptographic signature first (this is the
+// Verification order matters: cryptographic signature first (vc.ts -- the
 // only step that actually proves the claims weren't tampered with), *then*
 // the DB lookup -- purely to check revocation, which is inherently a
 // DB-side concept a JWT signature can never reflect on its own. The DB
@@ -92,33 +80,10 @@ export async function verifyPresentedCapability(
   capability: string,
   minimumTier: CapabilityTier,
 ): Promise<CapabilityCheckResult> {
-  const verification = await veramoAgent.verifyCredential({
-    credential: presentedJwt as unknown as VerifiableCredential,
-    policies: { expirationDate: true },
-  });
-  if (!verification.verified) return { allowed: false, reason: "signature_invalid" };
+  const verification = await verifyCapabilityGrantJwt(presentedJwt);
+  if (!verification.ok) return { allowed: false, reason: verification.reason };
 
-  const vc = verification.verifiableCredential as unknown as {
-    type?: string[];
-    expirationDate?: string;
-    credentialSubject: { id?: string; capability?: string; tier?: number };
-  };
-  if (!vc.type?.includes("CapabilityGrant")) return { allowed: false, reason: "wrong_credential_type" };
-
-  // Explicit application-level check, not just belt-and-suspenders:
-  // confirmed empirically during Phase 1 testing that @veramo/credential-jwt
-  // 7.0.0's verifyCredential does NOT reject an already-expired JWT-VC on
-  // its own, `policies.expirationDate: true` above notwithstanding -- a
-  // hand-built JWT with `exp` 30s in the past still verified as `true` in
-  // a direct reproduction. Filed as a real, load-bearing gap in that
-  // dependency, not assumed fixed -- this check is what actually enforces
-  // expiry until/unless that's confirmed resolved upstream.
-  if (vc.expirationDate && new Date(vc.expirationDate) < new Date()) {
-    return { allowed: false, reason: "signature_invalid" };
-  }
-
-  const subjectDid = vc.credentialSubject.id;
-  if (!subjectDid) return { allowed: false, reason: "signature_invalid" };
+  const { subjectDid } = verification;
 
   const dbRow = await pool.query(
     `SELECT cg.tier, cg.expires_at
@@ -133,7 +98,7 @@ export async function verifyPresentedCapability(
     return { allowed: false, reason: "expired" };
   }
 
-  if (vc.credentialSubject.capability !== capability && vc.credentialSubject.capability !== "*") {
+  if (verification.capability !== capability && verification.capability !== "*") {
     return { allowed: false, reason: "wrong_capability" };
   }
   if ((grant.tier as CapabilityTier) < minimumTier) {

@@ -1,7 +1,7 @@
 -- The raw, signed Verifiable Credential -- source of truth. jwt is the
 -- actual signed artifact; everything else here is denormalized from its
 -- claims purely for querying, never trusted on its own. The MCP capability
--- middleware re-verifies the jwt's signature via Veramo on every check that
+-- middleware re-verifies the jwt's signature (src/identity/vc.ts) on every check that
 -- gates a mutating action -- this table existing doesn't mean a grant is
 -- valid, only that it was issued and not (yet) revoked.
 CREATE TABLE verifiable_credentials (
