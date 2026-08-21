@@ -16,16 +16,21 @@ D-Central-native successor to `fieldops-system` (v1) — built clean-slate per t
 - `test/veramo.did.test.ts` — did:key create/resolve/delete via Veramo; did:webvh log creation + resolution from an in-memory log via didwebvh-ts directly (no live HTTPS endpoint needed for this test — see "Known gaps" below for what that means for real network resolution)
 - `test/veramo.vc.test.ts` — VC issue/verify, tampered-JWT rejection, and a documented upstream expiration-checking gap (see below)
 
-**Written, not yet run** (blocked on local Postgres — see below):
+**Now verified live against a real database — all 4 test files, 13/13 tests passing:**
 - `test/capabilities.test.ts` — DB-backed capability grant issue → verify → revoke lifecycle, wrong-capability rejection, unknown-credential rejection
 - `test/mcp.test.ts` — `whoami`/`list_capabilities` over a real `McpServer` via `InMemoryTransport`, capability-gating allow/deny
 
-**Blocked this session**: Docker Desktop's GUI processes were running (`Responding: True`) but the daemon never accepted a connection through this environment's shell after 10+ minutes (`docker ps` timed out repeatedly). No native Postgres install exists on this machine either. The two DB-dependent test files above are believed correct (they follow the exact same patterns as the passing DB-free tests and exercise real, typechecked code paths) but have **not actually been run against a real database** — don't treat them as verified until they have been. Next session: get a Postgres reachable (fix Docker Desktop, or `docker run postgres` from a shell where the daemon actually responds, or a native install), then:
+Postgres runs via `docker-compose.yml` at the repo root (`pgvector/pgvector:pg16`, published on host port **5433**, deliberately not 5432 — avoids any collision with v1 (`fieldops-system`)'s own postgres container or anything else already bound to the host's default Postgres port):
 ```bash
+docker compose up -d
 npm run migrate
 npm run sync:policy   # after setting reviewed_by/reviewed_at in policy/sovereignty_tiers.yaml
 npm test
 ```
+
+A real, genuine bug turned up on the first run once a database actually existed: `test/capabilities.test.ts` and `test/mcp.test.ts` each inserted their own test-fixture row into `nodes` with `is_self: true` — fine in isolation, but `nodes_single_self_idx` correctly enforces that flag as a global singleton across the whole database, so whichever file's insert ran second failed with a unique-constraint violation. Not a schema bug (the constraint did exactly its job); the tests were wrong to claim `is_self: true` for an arbitrary fixture node. Fixed in both files (`is_self: false` — they don't need to *be* the deployment's self-node, just a valid FK target for `capability_grants.issuer_node_id`). Also confirmed clean: both files' `afterAll` cleanup leaves zero residual rows in `nodes`/`capability_grants`/`verifiable_credentials`.
+
+Docker Desktop had been failing to accept connections through this environment's shell in an earlier attempt this session (GUI running, daemon unreachable) — resolved itself by the time this was retried; no fix was needed here beyond retrying. Worth knowing for next time: `npm test` at the repo root will also pick up `vendor/openconstructionerp`'s own (large, unrelated, jsdom-dependent) test suite unless scoped — `vitest.config.ts` now sets `include: ["test/**/*.test.ts"]` / `exclude: ["vendor/**", ...]` specifically to prevent that.
 
 ## Real bugs found and fixed during Phase 1 testing (kept as a record, not just fixed silently)
 

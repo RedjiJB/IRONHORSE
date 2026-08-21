@@ -21,8 +21,11 @@ let client: Client;
 beforeAll(async () => {
   const issuer = await veramoAgent.didManagerCreate({ provider: "did:key" });
   issuerDid = issuer.did;
+  // is_self stays false -- same reasoning as capabilities.test.ts: this is
+  // an arbitrary test-fixture node, and nodes_single_self_idx enforces the
+  // real self-node as a global singleton across every file sharing this DB.
   const nodeRow = await pool.query(
-    `INSERT INTO nodes (did, display_name, is_self) VALUES ($1, 'test-node-mcp', true) RETURNING id`,
+    `INSERT INTO nodes (did, display_name, is_self) VALUES ($1, 'test-node-mcp', false) RETURNING id`,
     [issuerDid],
   );
   issuerNodeId = nodeRow.rows[0].id;

@@ -7,7 +7,8 @@ D-Central-native successor to [`fieldops-system`](../fieldops-system) (v1) — b
 ```bash
 git submodule update --init --recursive   # pulls vendor/openconstructionerp (the frontend)
 npm install
-cp .env.example .env   # fill in DATABASE_URL, NODE_DID_DOMAIN, VERAMO_KMS_SECRET_KEY
+docker compose up -d   # postgres on host port 5433 -- deliberately not 5432, see docker-compose.yml
+cp .env.example .env   # fill in DATABASE_URL (port 5433), NODE_DID_DOMAIN, VERAMO_KMS_SECRET_KEY
 npm run migrate
 npm run sync:policy    # after reviewing and approving policy/sovereignty_tiers.yaml
 npm test

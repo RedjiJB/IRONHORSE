@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dcentral
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: dcentral_fieldops
+    ports:
+      # Deliberately not 5432 -- avoids any collision with v1
+      # (fieldops-system)'s own postgres container or anything else
+      # already bound to the host's default Postgres port.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - dcentral_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  dcentral_postgres_data:

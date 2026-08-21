@@ -14,8 +14,11 @@ let issuerNodeId: string;
 beforeAll(async () => {
   const issuer = await veramoAgent.didManagerCreate({ provider: "did:key" });
   issuerDid = issuer.did;
+  // is_self stays false -- this is an arbitrary test-fixture node, not the
+  // one real "this deployment's own identity" row, which nodes_single_self_idx
+  // enforces as a global singleton across every test file sharing this DB.
   const nodeRow = await pool.query(
-    `INSERT INTO nodes (did, display_name, is_self) VALUES ($1, 'test-node', true) RETURNING id`,
+    `INSERT INTO nodes (did, display_name, is_self) VALUES ($1, 'test-node', false) RETURNING id`,
     [issuerDid],
   );
   issuerNodeId = nodeRow.rows[0].id;
