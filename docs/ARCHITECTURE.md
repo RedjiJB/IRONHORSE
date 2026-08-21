@@ -2,7 +2,35 @@
 
 D-Central-native successor to `fieldops-system` (v1) — built clean-slate per the approved plan (see the plan file this session was built from). v1 stays live for Sod Boys Ltd throughout this build; nothing here touches it.
 
-## Status (2026-08-21, Phase 1 in progress)
+## Status (2026-08-21, Phase 1 complete, Phase 2 in progress)
+
+**Phase 2 slice 1 landed: the actual dispatch backbone.** Sites, crew members (phone-identity, no DID — see below), job types, shifts, timeclock entries, and a generalized confirm-before-execute mechanism, all re-expressed from v1's `docs/DATABASE_SCHEMA.md` as the requirements baseline (not v1's code) and exposed as MCP-gated capabilities.
+
+**New this slice:**
+- `src/domain/` — the FieldOps business logic layer, separate from `src/identity/`'s D-Central layer: `sites.ts`, `crewMembers.ts`, `jobTypes.ts`, `shifts.ts`, `timeclock.ts`, `confirmations.ts`, `geo.ts` (haversine, ported unchanged from v1's `backend/src/lib/geo.ts` — it's just math)
+- `src/db/migrations/0006`–`0010` — sites, crew_members, job_types/jobs, shifts/timeclock_entries, pending_confirmations
+- `src/mcp/tools/sites.ts`, `crewMembers.ts`, `jobTypes.ts`, `shifts.ts`, `timeclock.ts`, `confirmations.ts` — 14 new MCP tools, all capability-gated via the same `requireCapability` middleware Phase 1 built, no changes needed to that layer
+- **Generalized confirm-before-execute** (`src/domain/confirmations.ts`): v1's hard-coded 7-tool pilot (a `pending_confirmations.action_type` `CHECK` enum widened by migration three separate times as the pilot grew) replaced with an open registry — `registerConfirmationExecutor(actionType, executor)`. `log_timeclock_event` is the first action wired to it, matching v1's own flagship pilot tool and its exact reasoning: a crew member's own confirmation of their hours isn't independent verification of anything. Calling the tool doesn't execute directly — it creates a row and returns `awaiting_review`; `approve_pending_confirmation` re-resolves `geofence_verified` fresh against *current* site state (not what was true at submission time) before actually creating the `timeclock_entries` row, same "approving re-validates against current state" behavior v1 documented.
+- **Reviewer authorization is a genuinely separate check from the MCP capability tier**, proven by a dedicated test: an agent can hold a valid tier-3 `approve_pending_confirmation` grant and still be denied if the `reviewerCrewMemberId` it's approving on behalf of doesn't hold crew role `management`/`owner`. The two gates (which agent may call this tool at all vs. which human role may actually approve) are independent, not one masking the other.
+
+**Verified live against a real database — all 7 test files, 37/37 tests passing** (18 from Phase 1 identity work, 19 new this slice):
+- `test/domain.sites-crew-shifts.test.ts` — sites/crew_members/job_types/shifts CRUD, including the seeded job-type list matching v1's documented 8 values exactly
+- `test/domain.timeclock-confirmations.test.ts` — geofence verification (inside/outside/no-coordinates/no-site), the full submit→approve→reject lifecycle, non-management reviewer denial, and double-review denial
+- `test/mcp.timeclock-confirmations.test.ts` — the same flow again but through real MCP tool calls with real capability JWTs, to prove the *wiring* is correct, not just the domain logic: a tier-2 dispatch agent can submit but is denied approving (no tier-3 grant); a tier-3 admin agent can approve; and a tier-3 agent's approval is still denied at the domain layer when the human reviewer it names isn't management/owner
+
+Confirmed clean: every test file's `afterAll` cleanup leaves zero residual rows across every table touched (`sites`, `crew_members`, `shifts`, `timeclock_entries`, `pending_confirmations`, plus the existing identity tables).
+
+Setup is unchanged from Phase 1 (still current, not historical, despite living under the next section down):
+```bash
+docker compose up -d
+npm run migrate
+npm run sync:policy   # after setting reviewed_by/reviewed_at in policy/sovereignty_tiers.yaml
+npm test
+```
+
+**Deferred, not lost** (see the project's task list): assets/consumables/loadouts/checkouts/orders/transfers/vendors/purchase_orders, vehicles/vehicle_telemetry/trips, documents, the alerts/exceptions engine, notifications, payroll, spending, and dashboard auth (users/sessions) are all still v1-only. This slice is the dispatch backbone, not full parity yet.
+
+## Status (2026-08-21, Phase 1 — historical, superseded by the section above)
 
 **Identity stack replaced mid-Phase-1, by explicit instruction: no Veramo, no `didwebvh-ts`.** The section below this one ("Real bugs found...") describes the Veramo-based implementation that was built, tested, and working — kept as a historical record since the bugs found there are genuinely instructive, not because that code still exists. It was fully removed and replaced with a from-scratch `did:web` + JWT-VC implementation (no framework, ~250 lines total across `did.ts`/`keys.ts`/`vc.ts`) built directly on Node's native Ed25519 support and `jose` (a minimal JWS/JWT mechanics library, not a DID/VC framework — see "Technology decisions" below). The dependency count dropped from 171 packages to 89 as a direct result.
 

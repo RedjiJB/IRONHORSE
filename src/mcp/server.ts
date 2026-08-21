@@ -1,9 +1,21 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { registerIdentityTools } from "./tools/identity.js";
+import { registerSiteTools } from "./tools/sites.js";
+import { registerCrewMemberTools } from "./tools/crewMembers.js";
+import { registerJobTypeTools } from "./tools/jobTypes.js";
+import { registerShiftTools } from "./tools/shifts.js";
+import { registerTimeclockTools } from "./tools/timeclock.js";
+import { registerConfirmationTools } from "./tools/confirmations.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "dcentral-fieldops", version: "0.1.0" });
   registerIdentityTools(server);
+  registerSiteTools(server);
+  registerCrewMemberTools(server);
+  registerJobTypeTools(server);
+  registerShiftTools(server);
+  registerTimeclockTools(server); // also registers the timeclock_event confirmation executor
+  registerConfirmationTools(server);
   return server;
 }
 
