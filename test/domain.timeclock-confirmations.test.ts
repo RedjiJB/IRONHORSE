@@ -110,6 +110,13 @@ describe("confirm-before-execute: timeclock_event", () => {
     const entry = await pool.query("SELECT * FROM timeclock_entries WHERE id = $1", [result.confirmation.result_id]);
     expect(entry.rows[0].crew_member_id).toBe(crewMemberId);
     expect(entry.rows[0].geofence_verified).toBe(true);
+
+    // GPS stays plain, available data -- not proven-without-revealing --
+    // by explicit instruction, so the raw coordinates a real
+    // confirm-before-execute flow actually used must survive on the row,
+    // not just the derived boolean.
+    expect(entry.rows[0].lat).toBeCloseTo(45.4215);
+    expect(entry.rows[0].lng).toBeCloseTo(-75.6972);
   });
 
   it("an owner-role reviewer is also accepted, not just 'management'", async () => {

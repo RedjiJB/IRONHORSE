@@ -32,6 +32,8 @@ export type TimeclockEntry = {
   site_id: string | null;
   timestamp: string;
   geofence_verified: boolean;
+  lat: number | null;
+  lng: number | null;
 };
 
 // The actual effect -- called either directly, or by the confirmation-
@@ -45,12 +47,14 @@ export async function createTimeclockEntry(args: {
   eventType: TimeclockEventType;
   siteId?: string | null;
   geofenceVerified: boolean;
+  lat?: number | null;
+  lng?: number | null;
 }): Promise<TimeclockEntry> {
   const result = await pool.query(
-    `INSERT INTO timeclock_entries (crew_member_id, event_type, site_id, geofence_verified)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO timeclock_entries (crew_member_id, event_type, site_id, geofence_verified, lat, lng)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [args.crewMemberId, args.eventType, args.siteId ?? null, args.geofenceVerified],
+    [args.crewMemberId, args.eventType, args.siteId ?? null, args.geofenceVerified, args.lat ?? null, args.lng ?? null],
   );
   return result.rows[0] as TimeclockEntry;
 }
@@ -75,7 +79,7 @@ export function registerTimeclockConfirmationExecutor(): void {
     const lat = payload.lat as number | null | undefined;
     const lng = payload.lng as number | null | undefined;
     const geofenceVerified = await resolveGeofenceVerified(siteId, lat, lng);
-    const entry = await createTimeclockEntry({ crewMemberId, eventType, siteId, geofenceVerified });
+    const entry = await createTimeclockEntry({ crewMemberId, eventType, siteId, geofenceVerified, lat, lng });
     return { resultId: entry.id };
   });
 }
