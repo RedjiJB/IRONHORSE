@@ -5,12 +5,17 @@ D-Central-native successor to [`fieldops-system`](../fieldops-system) (v1) — b
 ## Setup
 
 ```bash
+git submodule update --init --recursive   # pulls vendor/openconstructionerp (the frontend)
 npm install
 cp .env.example .env   # fill in DATABASE_URL, NODE_DID_DOMAIN, VERAMO_KMS_SECRET_KEY
 npm run migrate
 npm run sync:policy    # after reviewing and approving policy/sovereignty_tiers.yaml
 npm test
 ```
+
+## Frontend
+
+`vendor/openconstructionerp` is a git submodule of [OpenConstructionERP](https://github.com/datadrivenconstruction/OpenConstructionERP) (AGPL-3.0) — only its `frontend/` subdirectory is used. See `docs/ARCHITECTURE.md`'s "Frontend" section for the license implications and what's actually left to do to wire it up (not started).
 
 ## Scripts
 
