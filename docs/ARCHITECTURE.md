@@ -101,7 +101,7 @@ openclaw mcp add dcentral-fieldops --transport streamable-http --url http://loca
 ## Open decisions (unblocked from Phase 1, real before Phase 2)
 
 1. Exact hosting device for the eventual deployment (Pi 5 vs. mini-PC vs. eventual VPS — VPS would need an explicit sovereignty-tier exception, not a default).
-2. Domain for the node's `did:web` — under `sodboysltd.org` (the v1 client-facing domain) or a separate D-Central-branded domain. Blocks real end-to-end network-resolution testing against the actual production transport.
+2. ~~Domain for the node's `did:web`~~ — **decided 2026-08-21**: a subdomain of `sodboysltd.org` (`id.sodboysltd.org`), not a separate D-Central-branded domain, trading node/client identity separation for reusing the Cloudflare Tunnel infra v1 already has proven. Set in `.env`/`.env.example` (`NODE_DID_DOMAIN`). **Not yet done**: the actual DNS record and Cloudflare Tunnel route for `id.sodboysltd.org` don't exist — this decision only fixed the DID's namespace, real end-to-end HTTPS resolution against the production transport still needs that infra provisioned.
 3. Local vs. external embedding model for pgvector, once a knowledge base exists to embed.
 4. ~~Dashboard as an MCP client itself vs. a thin REST façade~~ — **decided**, see "Frontend" below: a full React SPA naturally consumes a REST/JSON API, not MCP-over-HTTP in-browser. A thin REST façade in front of the same MCP tool implementations is now the plan, not just a lean.
 5. What v1 data is worth migrating vs. re-bootstrapping fresh, in the eventual Phase 4 cutover.
