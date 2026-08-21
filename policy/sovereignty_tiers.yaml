@@ -1,0 +1,101 @@
+# Sovereignty-tier policy
+#
+# Every function class that touches a network boundary outside this node's
+# own infrastructure gets an explicit, written decision here -- never a
+# silent default. v1 (fieldops-system) crossed this line by default in two
+# places (LLM provider calls, reverse-geocoding) with no decision on record;
+# this file exists specifically so that never happens again on this system.
+#
+# status values:
+#   external_accepted  -- external API use is a deliberate, reviewed tradeoff
+#   external_pending    -- currently external, needs a real decision before
+#                          Phase 2 domain logic is allowed to depend on it
+#   self_hosted_required -- must never leave this node's own infrastructure
+#   self_hosted_planned  -- external for now, self-hosted replacement is
+#                           planned before this function ships to production
+#
+# Changes to this file require explicit review -- see docs/ARCHITECTURE.md's
+# "Sovereignty-tiering policy" section for the enforcement mechanism (this
+# file is mirrored into a Postgres table read at runtime by the MCP
+# invocation middleware).
+
+version: 1
+reviewed_by: null # fill in on first real review pass, before Phase 2 begins
+reviewed_at: null
+
+functions:
+  - id: llm_inference
+    description: >
+      Model calls for agent reasoning/tool-use (dispatch, exceptions,
+      confirmations). v1's shape: DeepSeek primary, Kimi/OpenAI/Gemini/Claude
+      fallback chain, cheapest-to-most-expensive.
+    status: external_accepted
+    rationale: >
+      Self-hosting a model capable of reliable tool-use/agentic reasoning on
+      Pi-class or even modest server hardware is not currently viable at the
+      quality bar this system needs. Accepted as an external dependency,
+      mitigated by a multi-provider fallback chain (no single point of
+      failure) and by every mutating action still routing through
+      confirm-before-execute regardless of which model produced it -- the
+      sovereignty boundary is crossed, but the blast radius of a bad model
+      output is bounded by that gate, not by keeping inference local.
+    open_items:
+      - Formalize which specific providers are acceptable (data-handling
+        terms review), not just "whichever chain has been convenient."
+
+  - id: geocoding_reverse
+    description: >
+      Reverse-geocoding a lat/lng into a human-readable address for
+      telemetry/timeclock/checkout records. v1 used OpenStreetMap Nominatim.
+    status: external_pending
+    rationale: >
+      Carried forward from v1 with no prior written decision -- exactly the
+      default this policy exists to stop. Nominatim is free, no API key,
+      but every reverse-geocode call sends a crew member's real GPS
+      coordinate to a third party. Needs a real decision: accept as-is
+      (low-sensitivity data, OSM's own policy is reasonable), self-host a
+      Nominatim instance (real infra cost, full control), or drop
+      reverse-geocoding entirely and store raw coordinates only.
+    open_items:
+      - Decide before any Phase 2 telemetry/timeclock work depends on this.
+
+  - id: weather_forecast
+    description: Weather-triggered alerts (v1's alert_type 'weather').
+    status: external_pending
+    rationale: >
+      v1 used a weather API with no sovereignty review on record. Low
+      sensitivity (no crew/location PII leaves the node for a generic
+      forecast query), but still needs an explicit decision rather than
+      inheriting v1's default silently.
+    open_items:
+      - Decide before this alert type is re-implemented in Phase 2.
+
+  - id: embedding_generation
+    description: >
+      Generating vector embeddings for the pgvector knowledge-base/RAG
+      layer -- new in this system, v1 never built this at all.
+    status: external_pending
+    rationale: >
+      Real tradeoff, not yet decided: a local embedding model is fully
+      sovereign but Pi-class (or even modest server) hardware may struggle
+      on quality/latency for a model good enough to make retrieval useful;
+      an external embedding API is cheap and high-quality but sends
+      knowledge-base content (which may include vendor/SOP/incident detail)
+      to a third party on every write.
+    open_items:
+      - Benchmark a local embedding model on the actual target hardware
+        (see docs/ARCHITECTURE.md "Open decisions" -- hosting device) before
+        deciding. This decision is a hard prerequisite for the v1.3/v1.4-
+        equivalent RAG work in this system's own roadmap.
+
+  - id: federation_transport
+    description: >
+      Cross-node message exchange once a second D-Central node exists.
+    status: self_hosted_required
+    rationale: >
+      By definition this is node-to-node communication within D-Central's
+      own trust boundary, not a third-party API dependency -- always
+      self-hosted/self-controlled infrastructure, never routed through an
+      external service. Currently a loopback/no-op FederationTransport
+      implementation only (see src/federation/) -- this entry exists so the
+      policy is on record before Phase 5 gives it a real second endpoint.

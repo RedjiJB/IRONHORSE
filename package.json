@@ -1,0 +1,44 @@
+{
+  "name": "dcentral-fieldops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "D-Central-native successor to fieldops-system -- DID/VC identity, MCP integration surface, capability-tiered authorization. Phase 1: foundational skeleton, no domain logic yet.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "migrate": "tsx src/db/migrate.ts",
+    "sync:policy": "tsx src/identity/syncSovereigntyPolicy.ts",
+    "mcp:stdio": "tsx src/mcp/transports/stdio.ts",
+    "mcp:http": "tsx src/mcp/transports/http.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@noble/curves": "^1.9.7",
+    "@veramo/core": "^7.0.0",
+    "@veramo/core-types": "^7.0.0",
+    "@veramo/credential-jwt": "^7.0.0",
+    "@veramo/credential-w3c": "^7.0.0",
+    "@veramo/did-manager": "^7.0.0",
+    "@veramo/did-provider-key": "^7.0.0",
+    "@veramo/did-resolver": "^7.0.0",
+    "@veramo/key-manager": "^7.0.0",
+    "@veramo/kms-local": "^7.0.0",
+    "did-resolver": "^4.1.0",
+    "didwebvh-ts": "^2.8.0",
+    "dotenv": "^16.4.5",
+    "pg": "^8.12.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^22.5.0",
+    "@types/pg": "^8.11.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.0"
+  }
+}
