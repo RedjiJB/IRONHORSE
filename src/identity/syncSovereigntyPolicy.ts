@@ -13,17 +13,25 @@ import { pool } from "../db/pool.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const POLICY_PATH = join(__dirname, "..", "..", "policy", "sovereignty_tiers.yaml");
 
+// reviewed_by/reviewed_at live per-function, not at the file's top level --
+// the sovereignty_tiers table has always had these as per-row columns (see
+// src/db/migrations/0003_sovereignty_tiers.sql); this script previously
+// read a single top-level pair and stamped it onto every row uniformly,
+// which meant it was structurally impossible to have some functions
+// reviewed and others still genuinely pending, even though that's exactly
+// the real state of this file most of the time. Fixed to match what the
+// schema always actually supported.
 type PolicyFunction = {
   id: string;
   description: string;
   status: "external_accepted" | "external_pending" | "self_hosted_required" | "self_hosted_planned";
   rationale: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
 };
 
 type PolicyFile = {
   version: number;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
   functions: PolicyFunction[];
 };
 
@@ -45,15 +53,16 @@ async function main() {
            reviewed_by = EXCLUDED.reviewed_by,
            reviewed_at = EXCLUDED.reviewed_at,
            synced_at = now()`,
-        [fn.id, fn.description.trim(), fn.status, fn.rationale.trim(), policy.reviewed_by, policy.reviewed_at],
+        [fn.id, fn.description.trim(), fn.status, fn.rationale.trim(), fn.reviewed_by, fn.reviewed_at],
       );
     }
     await client.query("COMMIT");
     console.log(`Synced ${policy.functions.length} sovereignty-tier entries.`);
-    if (!policy.reviewed_by) {
+    const unreviewed = policy.functions.filter((fn) => !fn.reviewed_by);
+    if (unreviewed.length > 0) {
       console.warn(
-        "WARNING: policy/sovereignty_tiers.yaml has never been reviewed (reviewed_by is null). " +
-          "Per the Phase 1 plan, this must be reviewed and approved before any Phase 2 domain logic depends on an external function.",
+        `WARNING: ${unreviewed.length} function(s) still unreviewed (reviewed_by is null): ${unreviewed.map((fn) => fn.id).join(", ")}. ` +
+          "Per the Phase 1 plan, each function must be individually reviewed and approved before any Phase 2 domain logic depends on it.",
       );
     }
   } catch (err) {

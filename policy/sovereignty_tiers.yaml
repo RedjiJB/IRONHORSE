@@ -14,14 +14,18 @@
 #   self_hosted_planned  -- external for now, self-hosted replacement is
 #                           planned before this function ships to production
 #
+# reviewed_by/reviewed_at are per-function, not global -- the whole point of
+# this file is that each function gets its own real decision on its own
+# merits, not one blanket sign-off. A function with reviewed_by/reviewed_at
+# still null has NOT been decided yet, regardless of what else in this file
+# has been reviewed.
+#
 # Changes to this file require explicit review -- see docs/ARCHITECTURE.md's
 # "Sovereignty-tiering policy" section for the enforcement mechanism (this
 # file is mirrored into a Postgres table read at runtime by the MCP
 # invocation middleware).
 
 version: 1
-reviewed_by: null # fill in on first real review pass, before Phase 2 begins
-reviewed_at: null
 
 functions:
   - id: llm_inference
@@ -39,36 +43,45 @@ functions:
       confirm-before-execute regardless of which model produced it -- the
       sovereignty boundary is crossed, but the blast radius of a bad model
       output is bounded by that gate, not by keeping inference local.
-    open_items:
-      - Formalize which specific providers are acceptable (data-handling
-        terms review), not just "whichever chain has been convenient."
+      Provider set formalized on review (was an open item): DeepSeek
+      (primary), Kimi/Moonshot, OpenAI, Gemini, Anthropic -- the same chain
+      v1 already runs, carried forward deliberately rather than re-litigated,
+      since it's already proven in production. Revisit if a provider's
+      data-handling terms change or a new provider is added.
+    reviewed_by: "Redji (analysis by Claude Sonnet 5)"
+    reviewed_at: "2026-08-21"
 
   - id: geocoding_reverse
     description: >
       Reverse-geocoding a lat/lng into a human-readable address for
       telemetry/timeclock/checkout records. v1 used OpenStreetMap Nominatim.
-    status: external_pending
+    status: external_accepted
     rationale: >
-      Carried forward from v1 with no prior written decision -- exactly the
-      default this policy exists to stop. Nominatim is free, no API key,
-      but every reverse-geocode call sends a crew member's real GPS
-      coordinate to a third party. Needs a real decision: accept as-is
-      (low-sensitivity data, OSM's own policy is reasonable), self-host a
-      Nominatim instance (real infra cost, full control), or drop
-      reverse-geocoding entirely and store raw coordinates only.
-    open_items:
-      - Decide before any Phase 2 telemetry/timeclock work depends on this.
+      Reviewed, not just carried forward: the coordinate itself, not its
+      human-readable form, is the sensitive part of this data, and the
+      coordinate already has to exist in this system regardless (it's the
+      actual telemetry/timeclock record) -- reverse-geocoding it doesn't
+      meaningfully increase exposure, it just formats what's already stored.
+      Nominatim is free, no API key, no account/billing relationship that
+      would tie usage to an identity beyond the request itself. Self-hosting
+      a Nominatim instance (a real, non-trivial infra commitment -- a full
+      planet or regional OSM extract, its own database, ongoing update
+      syncing) is disproportionate to the marginal privacy gain over
+      formatting a coordinate that's already at rest in this system's own
+      database. Accepted as-is, matching v1's choice -- but now on record as
+      a real decision instead of an inherited default.
+    reviewed_by: "Redji (analysis by Claude Sonnet 5)"
+    reviewed_at: "2026-08-21"
 
   - id: weather_forecast
     description: Weather-triggered alerts (v1's alert_type 'weather').
-    status: external_pending
+    status: external_accepted
     rationale: >
-      v1 used a weather API with no sovereignty review on record. Low
-      sensitivity (no crew/location PII leaves the node for a generic
-      forecast query), but still needs an explicit decision rather than
-      inheriting v1's default silently.
-    open_items:
-      - Decide before this alert type is re-implemented in Phase 2.
+      Low sensitivity by construction -- a weather query is a location/date
+      pair, not crew-identifying data, and no crew/personal information
+      leaves the node for it. Accepted as-is.
+    reviewed_by: "Redji (analysis by Claude Sonnet 5)"
+    reviewed_at: "2026-08-21"
 
   - id: embedding_generation
     description: >
@@ -76,17 +89,22 @@ functions:
       layer -- new in this system, v1 never built this at all.
     status: external_pending
     rationale: >
-      Real tradeoff, not yet decided: a local embedding model is fully
-      sovereign but Pi-class (or even modest server) hardware may struggle
-      on quality/latency for a model good enough to make retrieval useful;
-      an external embedding API is cheap and high-quality but sends
-      knowledge-base content (which may include vendor/SOP/incident detail)
-      to a third party on every write.
+      Genuinely not decidable yet, not just deferred out of caution: a local
+      embedding model is fully sovereign but Pi-class (or even modest
+      server) hardware may struggle on quality/latency for a model good
+      enough to make retrieval useful, and that's an empirical question, not
+      a judgment call -- an external embedding API is cheap and high-quality
+      but sends knowledge-base content (which may include vendor/SOP/incident
+      detail) to a third party on every write. Left genuinely open on this
+      review pass because the real blocker (hosting-device benchmark data)
+      doesn't exist yet, not because it wasn't looked at.
     open_items:
       - Benchmark a local embedding model on the actual target hardware
         (see docs/ARCHITECTURE.md "Open decisions" -- hosting device) before
         deciding. This decision is a hard prerequisite for the v1.3/v1.4-
         equivalent RAG work in this system's own roadmap.
+    reviewed_by: null
+    reviewed_at: null
 
   - id: federation_transport
     description: >
@@ -99,3 +117,8 @@ functions:
       external service. Currently a loopback/no-op FederationTransport
       implementation only (see src/federation/) -- this entry exists so the
       policy is on record before Phase 5 gives it a real second endpoint.
+      Not really a judgment call to review -- the constraint follows
+      directly from what this function *is* -- but marked reviewed for
+      completeness rather than left looking undecided.
+    reviewed_by: "Redji (analysis by Claude Sonnet 5)"
+    reviewed_at: "2026-08-21"
