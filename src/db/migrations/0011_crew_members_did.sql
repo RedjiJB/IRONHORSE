@@ -1,0 +1,17 @@
+-- Crew members get real DIDs too, by explicit instruction -- not the
+-- phone-only identity Phase 2 slice 1 shipped with. Nullable, not because
+-- it's optional going forward (src/domain/crewMembers.ts's
+-- registerCrewMember always sets it now) but because this is a
+-- forward-only migration on a table that may already have rows from
+-- before this decision, and there's no real production data yet to
+-- backfill against.
+--
+-- The DID is custodially held by this node, not self-sovereign the way an
+-- agent's did:key notionally could be -- a crew member interacts entirely
+-- through WhatsApp text, with no wallet or device capable of holding a
+-- private key themselves. This node's own KMS (src/identity/keys.ts)
+-- generates and signs on their behalf. Worth being explicit about: "the
+-- crew member has a DID" here means "this system can issue and verify
+-- cryptographic claims about them," not "the crew member personally
+-- controls a private key."
+ALTER TABLE crew_members ADD COLUMN did TEXT UNIQUE;

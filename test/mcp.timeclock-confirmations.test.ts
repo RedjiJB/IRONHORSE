@@ -26,6 +26,7 @@ let managerCrewMemberId: string;
 const testDids: string[] = [];
 const createdSiteIds: string[] = [];
 const createdCrewIds: string[] = [];
+const createdCrewDids: string[] = [];
 
 beforeAll(async () => {
   issuerDid = didWebForAgent("id.dcentral-fieldops.test", "timeclock-mcp-test-issuer");
@@ -51,10 +52,12 @@ beforeAll(async () => {
   const crew = await registerCrewMember({ name: "QA MCP Timeclock Crew", phone: "+15559990701" });
   crewMemberId = crew.id;
   createdCrewIds.push(crew.id);
+  createdCrewDids.push(crew.did);
 
   const manager = await registerCrewMember({ name: "QA MCP Timeclock Manager", phone: "+15559990702", role: "management" });
   managerCrewMemberId = manager.id;
   createdCrewIds.push(manager.id);
+  createdCrewDids.push(manager.did);
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: "test-client", version: "0.1.0" });
@@ -64,8 +67,14 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool.query("DELETE FROM timeclock_entries WHERE crew_member_id = ANY($1)", [createdCrewIds]);
   await pool.query("DELETE FROM pending_confirmations WHERE submitted_by = ANY($1)", [createdCrewIds]);
-  await pool.query("DELETE FROM capability_grants WHERE issuer_node_id = $1", [issuerNodeId]);
-  await pool.query("DELETE FROM verifiable_credentials WHERE issuer_did = $1", [issuerDid]);
+  // Two separate issuers created grants/credentials in this test: this
+  // file's own throwaway issuerNodeId/issuerDid (for the agent capability
+  // grants), and the real self node (for registerCrewMember's
+  // PhoneBinding/crew:role:* credentials, keyed by subject rather than by
+  // that issuer) -- both need cleaning up.
+  await pool.query("DELETE FROM capability_grants WHERE issuer_node_id = $1 OR subject_did = ANY($2)", [issuerNodeId, createdCrewDids]);
+  await pool.query("DELETE FROM verifiable_credentials WHERE issuer_did = $1 OR subject_did = ANY($2)", [issuerDid, createdCrewDids]);
+  await pool.query("DELETE FROM keys WHERE did = ANY($1)", [createdCrewDids]);
   await pool.query("DELETE FROM nodes WHERE id = $1", [issuerNodeId]);
   await pool.query("DELETE FROM crew_members WHERE id = ANY($1)", [createdCrewIds]);
   await pool.query("DELETE FROM sites WHERE id = ANY($1)", [createdSiteIds]);

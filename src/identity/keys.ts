@@ -6,9 +6,14 @@
 // library's opinion of what those should look like.
 import { exportJWK, generateKeyPair, importJWK } from "jose";
 import type { CryptoKey, JWK, KeyObject } from "jose";
+import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 
-export async function generateAndStoreKeyPair(did: string): Promise<{ publicJwk: JWK }> {
+// Accepts an optional caller-owned transaction client so multi-step
+// identity flows (e.g. registerCrewMember) can make key generation part of
+// one atomic transaction -- otherwise a crash between this insert and a
+// later one leaves a stranded keypair with no owning record.
+export async function generateAndStoreKeyPair(did: string, existingClient?: PoolClient): Promise<{ publicJwk: JWK }> {
   const { publicKey, privateKey } = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
   const publicJwk = await exportJWK(publicKey);
   const privateJwk = await exportJWK(privateKey);
@@ -16,7 +21,8 @@ export async function generateAndStoreKeyPair(did: string): Promise<{ publicJwk:
   // JSONB columns need an explicit JSON.stringify -- node-postgres does not
   // serialize plain objects for jsonb parameters on its own (it would
   // otherwise send "[object Object]").
-  await pool.query(
+  const runner = existingClient ?? pool;
+  await runner.query(
     `INSERT INTO keys (did, public_jwk, private_jwk, algorithm) VALUES ($1, $2, $3, 'EdDSA')`,
     [did, JSON.stringify(publicJwk), JSON.stringify(privateJwk)],
   );

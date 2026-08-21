@@ -7,7 +7,7 @@
 // called -- this module only owns submit/list/approve/reject and the
 // registry, not any specific tool's argument shape.
 import { pool } from "../db/pool.js";
-import { getCrewMember, isManagementRole } from "./crewMembers.js";
+import { getCrewMember, hasManagementCapability } from "./crewMembers.js";
 
 export type PendingConfirmation = {
   id: string;
@@ -70,7 +70,11 @@ export async function approveConfirmation(id: string, reviewerCrewMemberId: stri
 
   const reviewer = await getCrewMember(reviewerCrewMemberId);
   if (!reviewer) return { ok: false, reason: "reviewer_not_found" };
-  if (!isManagementRole(reviewer.role)) return { ok: false, reason: "reviewer_not_management" };
+  // Re-verifies a real capability grant's signature (checkStandingCapability,
+  // via hasManagementCapability) rather than trusting crew_members.role as
+  // a plain, editable database string -- see docs/ARCHITECTURE.md's
+  // zero-trust note.
+  if (!(await hasManagementCapability(reviewer.did))) return { ok: false, reason: "reviewer_not_management" };
 
   const executor = executors.get(row.action_type);
   if (!executor) return { ok: false, reason: "no_executor_registered" };
@@ -103,7 +107,11 @@ export async function rejectConfirmation(
 
   const reviewer = await getCrewMember(reviewerCrewMemberId);
   if (!reviewer) return { ok: false, reason: "reviewer_not_found" };
-  if (!isManagementRole(reviewer.role)) return { ok: false, reason: "reviewer_not_management" };
+  // Re-verifies a real capability grant's signature (checkStandingCapability,
+  // via hasManagementCapability) rather than trusting crew_members.role as
+  // a plain, editable database string -- see docs/ARCHITECTURE.md's
+  // zero-trust note.
+  if (!(await hasManagementCapability(reviewer.did))) return { ok: false, reason: "reviewer_not_management" };
 
   const updated = await pool.query(
     `UPDATE pending_confirmations

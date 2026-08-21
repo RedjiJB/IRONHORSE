@@ -9,6 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "migrate": "tsx src/db/migrate.ts",
     "sync:policy": "tsx src/identity/syncSovereigntyPolicy.ts",
+    "bootstrap:node": "tsx src/identity/bootstrapNode.ts",
     "mcp:stdio": "tsx src/mcp/transports/stdio.ts",
     "mcp:http": "tsx src/mcp/transports/http.ts",
     "test": "vitest run"

@@ -6,16 +6,22 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { pool } from "../src/db/pool.js";
 import { getSite, listSites, registerSite } from "../src/domain/sites.js";
-import { getCrewMember, isManagementRole, listCrewMembers, registerCrewMember } from "../src/domain/crewMembers.js";
+import { getCrewMember, hasManagementCapability, listCrewMembers, registerCrewMember } from "../src/domain/crewMembers.js";
 import { listJobTypes } from "../src/domain/jobTypes.js";
 import { assignShift, confirmShift, listShifts } from "../src/domain/shifts.js";
 
 const createdSiteIds: string[] = [];
 const createdCrewIds: string[] = [];
+const createdCrewDids: string[] = [];
 const createdShiftIds: string[] = [];
 
 afterAll(async () => {
   await pool.query("DELETE FROM shifts WHERE id = ANY($1)", [createdShiftIds]);
+  // Every registerCrewMember call also issues real credentials -- clean
+  // those up too, not just the crew_members row itself.
+  await pool.query("DELETE FROM capability_grants WHERE subject_did = ANY($1)", [createdCrewDids]);
+  await pool.query("DELETE FROM verifiable_credentials WHERE subject_did = ANY($1)", [createdCrewDids]);
+  await pool.query("DELETE FROM keys WHERE did = ANY($1)", [createdCrewDids]);
   await pool.query("DELETE FROM crew_members WHERE id = ANY($1)", [createdCrewIds]);
   await pool.query("DELETE FROM sites WHERE id = ANY($1)", [createdSiteIds]);
   await pool.end();
@@ -49,27 +55,62 @@ describe("sites", () => {
 });
 
 describe("crew_members", () => {
-  it("registers a crew member with the default 'crew' role", async () => {
+  it("registers a crew member with a real DID and a signed PhoneBinding credential, not just a phone column", async () => {
     const crew = await registerCrewMember({ name: "QA Test Crew", phone: "+15559990501" });
     createdCrewIds.push(crew.id);
+    createdCrewDids.push(crew.did);
+
     expect(crew.role).toBe("crew");
     expect(crew.active).toBe(true);
+    expect(crew.did).toMatch(/^did:web:.+:crew:[0-9a-f-]{36}$/);
+
+    // The DID is custodially held -- confirm this node actually generated
+    // and stored a real keypair for it, not just a string.
+    const key = await pool.query("SELECT public_jwk FROM keys WHERE did = $1", [crew.did]);
+    expect(key.rowCount).toBe(1);
+
+    // A real signed credential exists binding this DID to the phone
+    // number -- not just the crew_members.phone column asserting it.
+    const vc = await pool.query(
+      "SELECT credential_type, subject_did FROM verifiable_credentials WHERE subject_did = $1",
+      [crew.did],
+    );
+    expect(vc.rows.some((r) => r.credential_type === "PhoneBinding")).toBe(true);
   });
 
   it("filters by role and active status", async () => {
     const manager = await registerCrewMember({ name: "QA Test Manager", phone: "+15559990502", role: "management" });
     createdCrewIds.push(manager.id);
+    createdCrewDids.push(manager.did);
 
     const managers = await listCrewMembers({ role: "management" });
     expect(managers.map((c) => c.id)).toContain(manager.id);
     expect(managers.every((c) => c.role === "management")).toBe(true);
   });
 
-  it("isManagementRole is true for management/owner, false otherwise", () => {
-    expect(isManagementRole("management")).toBe(true);
-    expect(isManagementRole("owner")).toBe(true);
-    expect(isManagementRole("crew")).toBe(false);
-    expect(isManagementRole("foreman")).toBe(false);
+  it("hasManagementCapability is true for management/owner, false for crew/foreman -- backed by a real capability grant, not a role string", async () => {
+    const crew = await registerCrewMember({ name: "QA Test Plain Crew", phone: "+15559990504" });
+    const foreman = await registerCrewMember({ name: "QA Test Foreman", phone: "+15559990505", role: "foreman" });
+    const manager = await registerCrewMember({ name: "QA Test Management", phone: "+15559990506", role: "management" });
+    const owner = await registerCrewMember({ name: "QA Test Owner", phone: "+15559990507", role: "owner" });
+    for (const c of [crew, foreman, manager, owner]) {
+      createdCrewIds.push(c.id);
+      createdCrewDids.push(c.did);
+    }
+
+    expect(await hasManagementCapability(crew.did)).toBe(false);
+    expect(await hasManagementCapability(foreman.did)).toBe(false);
+    expect(await hasManagementCapability(manager.did)).toBe(true);
+    expect(await hasManagementCapability(owner.did)).toBe(true); // owner implies management, matching v1's convention
+
+    // Confirm it's a real grant, not a hardcoded role list -- revoking it
+    // actually changes the answer.
+    const grant = await pool.query(
+      "SELECT id FROM capability_grants WHERE subject_did = $1 AND capability = 'crew:role:management'",
+      [manager.did],
+    );
+    await pool.query("UPDATE capability_grants SET revoked_at = now() WHERE id = $1", [grant.rows[0].id]);
+    expect(await hasManagementCapability(manager.did)).toBe(false);
   });
 
   it("returns null for a nonexistent crew member", async () => {
@@ -93,6 +134,7 @@ describe("shifts", () => {
     createdSiteIds.push(site.id);
     const crew = await registerCrewMember({ name: "QA Test Shift Crew", phone: "+15559990503" });
     createdCrewIds.push(crew.id);
+    createdCrewDids.push(crew.did);
 
     const shift = await assignShift({ crewMemberId: crew.id, siteId: site.id, date: "2026-08-25", startTime: "08:00" });
     createdShiftIds.push(shift.id);

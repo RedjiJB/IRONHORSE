@@ -8,6 +8,7 @@
 // DID resolution live in vc.ts/did.ts -- this file owns only the
 // authorization policy: what a given claim is allowed to do once it's
 // been proven genuine.
+import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { issueCapabilityGrantJwt, verifyCapabilityGrantJwt } from "./vc.js";
 
@@ -22,7 +23,12 @@ export type IssueCapabilityGrantArgs = {
   expiresAt?: Date;
 };
 
-export async function issueCapabilityGrant(args: IssueCapabilityGrantArgs): Promise<{
+// Accepts an optional caller-owned transaction client so multi-step
+// identity flows (e.g. registerCrewMember) can fold this grant's own
+// credential+grant pair into one larger atomic transaction. When called
+// standalone (no existingClient), it still commits its own transaction
+// exactly as before.
+export async function issueCapabilityGrant(args: IssueCapabilityGrantArgs, existingClient?: PoolClient): Promise<{
   credentialId: string;
   grantId: string;
   jwt: string;
@@ -30,9 +36,10 @@ export async function issueCapabilityGrant(args: IssueCapabilityGrantArgs): Prom
   const issuedAt = new Date();
   const jwt = await issueCapabilityGrantJwt(args);
 
-  const client = await pool.connect();
+  const client = existingClient ?? (await pool.connect());
+  const ownsTransaction = !existingClient;
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) await client.query("BEGIN");
     const credRow = await client.query(
       `INSERT INTO verifiable_credentials (jwt, issuer_did, subject_did, credential_type, issued_at, expires_at)
        VALUES ($1, $2, $3, 'CapabilityGrant', $4, $5)
@@ -47,13 +54,13 @@ export async function issueCapabilityGrant(args: IssueCapabilityGrantArgs): Prom
        RETURNING id`,
       [credentialId, args.subjectDid, args.issuerNodeId, args.capability, args.tier, args.expiresAt ?? null],
     );
-    await client.query("COMMIT");
+    if (ownsTransaction) await client.query("COMMIT");
     return { credentialId, grantId: grantRow.rows[0].id as string, jwt };
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (ownsTransaction) await client.query("ROLLBACK");
     throw err;
   } finally {
-    client.release();
+    if (ownsTransaction) client.release();
   }
 }
 
@@ -110,4 +117,42 @@ export async function verifyPresentedCapability(
 
 export async function revokeCapabilityGrant(grantId: string): Promise<void> {
   await pool.query("UPDATE capability_grants SET revoked_at = now() WHERE id = $1", [grantId]);
+}
+
+// Same authorization question as verifyPresentedCapability, asked the
+// other direction: not "is this presented JWT valid," but "does this DID
+// currently hold a valid grant at all" -- for checking a crew member's
+// standing role-capability (e.g. does the reviewer approving a
+// confirmation actually hold crew:role:management) rather than a JWT they
+// presented in this specific call. Same rigor: the DB row alone is never
+// trusted, its backing JWT's signature is re-verified before the grant is
+// treated as real.
+export async function checkStandingCapability(
+  subjectDid: string,
+  capability: string,
+  minimumTier: CapabilityTier,
+): Promise<CapabilityCheckResult> {
+  const dbRow = await pool.query(
+    `SELECT cg.tier, cg.expires_at, vc.jwt
+     FROM capability_grants cg
+     JOIN verifiable_credentials vc ON vc.id = cg.credential_id
+     WHERE cg.subject_did = $1 AND (cg.capability = $2 OR cg.capability = '*')
+       AND cg.revoked_at IS NULL AND vc.revoked_at IS NULL
+     ORDER BY cg.tier DESC
+     LIMIT 1`,
+    [subjectDid, capability],
+  );
+  const grant = dbRow.rows[0];
+  if (!grant) return { allowed: false, reason: "not_found_or_revoked" };
+  if (grant.expires_at && new Date(grant.expires_at) < new Date()) {
+    return { allowed: false, reason: "expired" };
+  }
+  if ((grant.tier as CapabilityTier) < minimumTier) {
+    return { allowed: false, reason: "insufficient_tier" };
+  }
+
+  const verification = await verifyCapabilityGrantJwt(grant.jwt as string);
+  if (!verification.ok) return { allowed: false, reason: verification.reason };
+
+  return { allowed: true, tier: grant.tier as CapabilityTier, subjectDid };
 }

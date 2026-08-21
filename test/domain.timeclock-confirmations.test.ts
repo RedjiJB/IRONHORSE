@@ -20,6 +20,7 @@ let managementId: string;
 let ownerId: string;
 const createdSiteIds: string[] = [];
 const createdCrewIds: string[] = [];
+const createdCrewDids: string[] = [];
 
 beforeAll(async () => {
   const site = await registerSite({
@@ -35,14 +36,17 @@ beforeAll(async () => {
   const crew = await registerCrewMember({ name: "QA Test Timeclock Crew", phone: "+15559990601" });
   crewMemberId = crew.id;
   createdCrewIds.push(crew.id);
+  createdCrewDids.push(crew.did);
 
   const manager = await registerCrewMember({ name: "QA Test Manager Reviewer", phone: "+15559990602", role: "management" });
   managementId = manager.id;
   createdCrewIds.push(manager.id);
+  createdCrewDids.push(manager.did);
 
   const owner = await registerCrewMember({ name: "QA Test Owner Reviewer", phone: "+15559990603", role: "owner" });
   ownerId = owner.id;
   createdCrewIds.push(owner.id);
+  createdCrewDids.push(owner.did);
 });
 
 afterAll(async () => {
@@ -51,6 +55,9 @@ afterAll(async () => {
     [createdCrewIds],
   );
   await pool.query("DELETE FROM pending_confirmations WHERE submitted_by = ANY($1)", [createdCrewIds]);
+  await pool.query("DELETE FROM capability_grants WHERE subject_did = ANY($1)", [createdCrewDids]);
+  await pool.query("DELETE FROM verifiable_credentials WHERE subject_did = ANY($1)", [createdCrewDids]);
+  await pool.query("DELETE FROM keys WHERE did = ANY($1)", [createdCrewDids]);
   await pool.query("DELETE FROM crew_members WHERE id = ANY($1)", [createdCrewIds]);
   await pool.query("DELETE FROM sites WHERE id = ANY($1)", [createdSiteIds]);
   await pool.end();
