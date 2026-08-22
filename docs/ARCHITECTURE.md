@@ -2,6 +2,20 @@
 
 D-Central-native successor to `fieldops-system` (v1) — built clean-slate per the approved plan (see the plan file this session was built from). v1 stays live for Sod Boys Ltd throughout this build; nothing here touches it.
 
+## Status (2026-08-22, Task #156 slices A–C: REST façade infra, auth, and notifications)
+
+Full plan and per-module scope table: `docs/ARCHITECTURE.md`'s own history / the approved plan file this build tracks. Summary of what's landed:
+
+**Slice A** — `src/facade/` (router, context, auth, server) + `src/identity/accessToken.ts`. New process (`npm run facade:http`, `FACADE_HTTP_PORT`), separate from the MCP transport. Login/refresh/`me` routes. Verified end-to-end through the real vendored frontend's login form against a real running façade, landing on its authenticated dashboard.
+
+**Slice B** — `alerts.resolved_by_user_id`/`notifications.acknowledged_by_user_id` (migration `0036`), closing a gap from before the `users` table existed. `resolveAlert`/`acknowledgeNotification` now take a `{crewMemberId?, userId?}` actor, mirroring `approveSpendRecord`'s existing pattern. Also fixed a real bug found while verifying this: `endTrip`'s duration compared a JS clock against a Postgres clock, producing an actual negative duration under normal timing, not just flaky — both timestamps now come from Postgres.
+
+**Slice C** — `src/facade/routes/notifications.ts`: list (`Page<Notification> & {unread_count}`), read/read-all → `acknowledgeNotification`. Real browser verification against the actual frontend surfaced a route not in the original scope table: `GET /v1/notifications/unread-count/`, polled independently by the header bell (`NotificationBell.tsx`) every 30s regardless of whether the notifications page is open — added. The real-time push channel (`.../notifications/ws/`) stays unbuilt by design: confirmed by reading `useNotificationsWebSocket.ts` that it's explicitly best-effort on the frontend (degrades to polling, never crashes), so it's genuine Phase-3-adjacent (WhatsApp/OpenClaw wiring) scope, not a gap. Per-user notification preferences and real deletion stay unbuilt too, per the original scope table (no backing concept for either).
+
+**A real test-isolation lesson from this work, worth keeping in mind for any future façade slice**: `read-all`-style bulk endpoints mutate global state, which is unsafe to assert on with exact-equality checks in a shared-database test suite where other files' tests run concurrently — assert deltas around your own fixtures, not equality between two separately-fetched snapshots of something system-wide.
+
+111/111 tests passing (`test/facade.auth.test.ts`, `test/facade.notifications.test.ts`).
+
 ## Status (2026-08-21, Phase 2 slice 6: payroll, spending, dashboard auth — final deferred cluster)
 
 **Users/sessions dashboard auth, spend_records, mileage claims, money instruments, and payroll reconciliation** — re-expressed from v1's `fieldops-system` as the requirements baseline, not copied code. 6 new migrations (`0030`–`0035`), 9 new domain modules, 5 new MCP tool files. This closes the entire originally-deferred Phase 2 list.

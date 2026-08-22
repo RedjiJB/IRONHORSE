@@ -51,6 +51,33 @@ export async function listPendingNotifications(): Promise<Notification[]> {
   return result.rows as Notification[];
 }
 
+// The dashboard inbox view -- org-wide, not per-recipient (v1 has no
+// per-recipient delivery tracking either, see 0027_notifications.sql's
+// comment). Paginated, newest first.
+export async function listNotifications(filter: { limit: number; offset: number; acknowledged?: boolean }): Promise<{ items: Notification[]; total: number }> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  if (filter.acknowledged !== undefined) {
+    conditions.push(filter.acknowledged ? "acknowledged_at IS NOT NULL" : "acknowledged_at IS NULL");
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const countResult = await pool.query(`SELECT count(*) FROM notifications ${where}`, params);
+  const total = Number(countResult.rows[0].count);
+
+  params.push(filter.limit, filter.offset);
+  const itemsResult = await pool.query(
+    `SELECT * FROM notifications ${where} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+  return { items: itemsResult.rows as Notification[], total };
+}
+
+export async function countUnacknowledgedNotifications(): Promise<number> {
+  const result = await pool.query("SELECT count(*) FROM notifications WHERE acknowledged_at IS NULL");
+  return Number(result.rows[0].count);
+}
+
 // Always called on every delivery attempt, success or failure -- a
 // separate call from markDelivered so a delivery-marking failure doesn't
 // erase the attempt count, same as v1.
