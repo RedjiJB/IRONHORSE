@@ -14,6 +14,9 @@ import { registerOrderTools } from "./tools/orders.js";
 import { registerCheckoutTools } from "./tools/checkouts.js";
 import { registerTransferTools } from "./tools/transfers.js";
 import { registerPurchaseOrderTools } from "./tools/purchaseOrders.js";
+import { registerVehicleTools } from "./tools/vehicles.js";
+import { registerTelemetryTools } from "./tools/telemetry.js";
+import { registerTripTools } from "./tools/trips.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "dcentral-fieldops", version: "0.1.0" });
@@ -32,6 +35,9 @@ export function buildMcpServer(): McpServer {
   registerCheckoutTools(server); // also registers the checkout_return confirmation executor
   registerTransferTools(server);
   registerPurchaseOrderTools(server); // also registers the purchase_order_fulfillment confirmation executor
+  registerVehicleTools(server);
+  registerTelemetryTools(server);
+  registerTripTools(server);
   return server;
 }
 

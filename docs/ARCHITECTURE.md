@@ -2,6 +2,22 @@
 
 D-Central-native successor to `fieldops-system` (v1) — built clean-slate per the approved plan (see the plan file this session was built from). v1 stays live for Sod Boys Ltd throughout this build; nothing here touches it.
 
+## Status (2026-08-21, Phase 2 slice 4: fleet/vehicles)
+
+**Vehicles, vehicle_telemetry, crew_telemetry, and trips** — re-expressed from v1's `fieldops-system` as the requirements baseline, not copied code. 4 new migrations (`0021`–`0024`), 3 new domain modules (`src/domain/vehicles.ts`, `telemetry.ts`, `trips.ts`), 3 new MCP tool files. Fully separate from the inventory/logistics slice — no shared table with `assets`/`checkouts`.
+
+**Load-bearing rules carried forward from v1's requirements:**
+- **A vehicle can only have one open trip at a time**, enforced by a real DB unique partial index (`trips_open_by_vehicle_idx ON trips (vehicle_id) WHERE ended_at IS NULL`) — a genuine improvement over v1's own app-layer-only check (row-locked `SELECT` then `INSERT`, which still has a race window). Structurally impossible to violate here, same bar as checkouts' single-holder guarantee.
+- **`vehicle_telemetry` is a location ping, nothing richer** — no ignition, speed, fuel, or diagnostics, matching v1's real scope (no OBD hardware was ever built; `telemetry_source.obd` stays a reserved, never-written enum value for a future integration).
+- **`distance_meters`/`duration_seconds` are lower-bound estimates**, not GPS-accurate — haversine-summed across whatever sparse telemetry fell inside the trip window; `NULL` (not `0`) with fewer than 2 points, meaning "no data," not "no movement," same as v1.
+- **`crew_telemetry` mirrors `vehicle_telemetry`'s exact shape**, keyed to a crew member instead — a person has their own location stream independent of any vehicle (a carpool passenger, or no assigned vehicle at all). A WhatsApp location share logs to `crew_telemetry` always, and to `vehicle_telemetry` only if exactly one vehicle resolves to that crew member as its assigned driver — both are written from the same share, not alternatives, same as v1 (`logLocationShare`).
+- **The reverse-geocode reuse-if-nearby decision is real, implemented logic** (`resolveReusableAddress` in `src/domain/telemetry.ts`) — a new point within 100m of the last resolved one reuses that address, matching v1's `GEOCODE_REUSE_RADIUS_METERS`. The actual Nominatim HTTP call itself is genuinely deferred to Phase 3 (WhatsApp/OpenClaw wiring) — callers may pass an already-resolved `address`, or leave it to be resolved later; nothing here makes an external network call.
+- **`log_vehicle_location`/`log_location_share` deliberately do NOT go through confirm-before-execute** — v1 explicitly exempts passive telemetry a crew member already chose to send ("not a decision made on their behalf"), unlike timeclock events or damage claims, which stay two-party confirmed.
+
+**Deliberately not built this slice** (same reasoning as inventory/logistics — the alerts/exceptions engine is separate, deferred scope): `wrong_site` and `vehicle_dark` alert generation, and the crew-level analogs (`crew_off_site`/`crew_location_stale`). `submit_mileage_claim` is also deferred — it's a `spend_records` row in v1, which belongs to the not-yet-built payroll/spending slice, not this one; it's independent of `trips.distance_meters` in v1 too (no code ties a mileage claim to a specific trip), so nothing here blocks building it later.
+
+**Verified live — all 9 test files, 61/61 tests passing, confirmed clean residue** (`test/domain.fleet-vehicles.test.ts`, 7 new tests).
+
 ## Status (2026-08-21, Phase 2 slice 3: inventory/logistics)
 
 **Vendors, assets, consumables, loadouts, checkouts, orders, transfers, and purchase orders** — re-expressed from v1's `fieldops-system` as the requirements baseline (its documented schema shapes and business rules), not copied code. 8 new migrations (`0013`–`0020`), 8 new domain modules (`src/domain/vendors.ts`, `assets.ts`, `consumables.ts`, `loadouts.ts`, `checkouts.ts`, `orders.ts`, `transfers.ts`, `purchaseOrders.ts`), 8 new MCP tool files exposing ~30 tools.
@@ -68,7 +84,7 @@ npm run sync:policy   # after setting reviewed_by/reviewed_at in policy/sovereig
 npm test
 ```
 
-**Deferred, not lost** (see the project's task list): ~~assets/consumables/loadouts/checkouts/orders/transfers/vendors/purchase_orders~~ (done, Phase 2 slice 3, see above), vehicles/vehicle_telemetry/trips, documents, the alerts/exceptions engine, notifications, payroll, spending, and dashboard auth (users/sessions) are all still v1-only. This slice is the dispatch backbone, not full parity yet.
+**Deferred, not lost** (see the project's task list): ~~assets/consumables/loadouts/checkouts/orders/transfers/vendors/purchase_orders~~ (done, Phase 2 slice 3), ~~vehicles/vehicle_telemetry/trips~~ (done, Phase 2 slice 4, see above), documents, the alerts/exceptions engine, notifications, payroll, spending, and dashboard auth (users/sessions) are all still v1-only. This slice is the dispatch backbone, not full parity yet.
 
 ## Status (2026-08-21, Phase 1 — historical, superseded by the section above)
 
