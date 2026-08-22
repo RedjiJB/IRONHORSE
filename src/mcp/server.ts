@@ -22,6 +22,10 @@ import { registerNotificationTools } from "./tools/notifications.js";
 import { registerSystemHealthTools } from "./tools/systemHealth.js";
 import { registerDocumentTools } from "./tools/documents.js";
 import { registerJobTools } from "./tools/jobs.js";
+import { registerUserTools } from "./tools/users.js";
+import { registerMoneyInstrumentTools } from "./tools/moneyInstruments.js";
+import { registerSpendingTools } from "./tools/spending.js";
+import { registerPayrollTools } from "./tools/payroll.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "dcentral-fieldops", version: "0.1.0" });
@@ -48,6 +52,10 @@ export function buildMcpServer(): McpServer {
   registerSystemHealthTools(server);
   registerDocumentTools(server);
   registerJobTools(server);
+  registerUserTools(server);
+  registerMoneyInstrumentTools(server);
+  registerSpendingTools(server); // also registers the mileage_claim confirmation executor
+  registerPayrollTools(server);
   return server;
 }
 

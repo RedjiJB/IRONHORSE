@@ -24,7 +24,15 @@ export type PendingConfirmation = {
   created_at: string;
 };
 
-export type ConfirmationExecutor = (payload: Record<string, unknown>) => Promise<{ resultId: string }>;
+// approvalData carries information supplied only at approval time, not
+// present in the original submission -- e.g. mileage_claim's rate_per_km,
+// which a manager sets when they approve, not something the driver
+// submitted. Every existing executor simply ignores the second
+// parameter; only mileage_claim's actually reads it.
+export type ConfirmationExecutor = (
+  payload: Record<string, unknown>,
+  approvalData?: Record<string, unknown>,
+) => Promise<{ resultId: string }>;
 
 const executors = new Map<string, ConfirmationExecutor>();
 
@@ -62,7 +70,7 @@ export type ReviewResult =
   | { ok: true; confirmation: PendingConfirmation }
   | { ok: false; reason: "not_found" | "already_reviewed" | "reviewer_not_found" | "reviewer_not_management" | "no_executor_registered" };
 
-export async function approveConfirmation(id: string, reviewerCrewMemberId: string): Promise<ReviewResult> {
+export async function approveConfirmation(id: string, reviewerCrewMemberId: string, approvalData?: Record<string, unknown>): Promise<ReviewResult> {
   const pending = await pool.query("SELECT * FROM pending_confirmations WHERE id = $1", [id]);
   const row = pending.rows[0] as PendingConfirmation | undefined;
   if (!row) return { ok: false, reason: "not_found" };
@@ -83,7 +91,7 @@ export async function approveConfirmation(id: string, reviewerCrewMemberId: stri
   // e.g. a timeclock event's geofence gets re-resolved fresh here, same
   // reasoning v1 documented for its own approval handlers: the world may
   // have changed between submission and review.
-  const { resultId } = await executor(row.payload);
+  const { resultId } = await executor(row.payload, approvalData);
 
   const updated = await pool.query(
     `UPDATE pending_confirmations

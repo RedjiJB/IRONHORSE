@@ -28,13 +28,18 @@ export function registerConfirmationTools(server: McpServer): void {
     {
       title: "Approve Pending Confirmation",
       description:
-        "Approves a pending action and actually executes it -- the reviewer must hold crew role 'management' or 'owner' (checked against reviewerCrewMemberId, not the calling agent's tier alone). Re-validates against current state, not state at submission time. Minimum tier: 3.",
-      inputSchema: z.object({ ...credentialArg, id: z.string().uuid(), reviewerCrewMemberId: z.string().uuid() }),
+        "Approves a pending action and actually executes it -- the reviewer must hold crew role 'management' or 'owner' (checked against reviewerCrewMemberId, not the calling agent's tier alone). Re-validates against current state, not state at submission time. approvalData carries anything only known at approval time, not submission (e.g. mileage_claim's ratePerKm). Minimum tier: 3.",
+      inputSchema: z.object({
+        ...credentialArg,
+        id: z.string().uuid(),
+        reviewerCrewMemberId: z.string().uuid(),
+        approvalData: z.record(z.string(), z.unknown()).optional(),
+      }),
     },
-    async ({ credentialJwt, id, reviewerCrewMemberId }) => {
+    async ({ credentialJwt, id, reviewerCrewMemberId, approvalData }) => {
       try {
         await requireCapability(credentialJwt, "mcp:tool:approve_pending_confirmation", 3);
-        const result = await approveConfirmation(id, reviewerCrewMemberId);
+        const result = await approveConfirmation(id, reviewerCrewMemberId, approvalData);
         if (!result.ok) return { content: [{ type: "text", text: `Rejected: ${result.reason}` }], isError: true };
         return { content: [{ type: "text", text: JSON.stringify(result.confirmation) }] };
       } catch (err) {
