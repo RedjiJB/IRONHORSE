@@ -46,7 +46,7 @@ export function registerAlertTools(server: McpServer): void {
     async ({ credentialJwt, id, resolvedByCrewMemberId }) => {
       try {
         await requireCapability(credentialJwt, "mcp:tool:resolve_alert", 3);
-        const result = await resolveAlert(id, resolvedByCrewMemberId);
+        const result = await resolveAlert(id, { crewMemberId: resolvedByCrewMemberId });
         if (!result.ok) return { content: [{ type: "text", text: `Denied: ${result.reason}` }], isError: true };
         return { content: [{ type: "text", text: JSON.stringify(result.alert) }] };
       } catch (err) {

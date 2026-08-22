@@ -47,11 +47,14 @@ import {
   reportOfflineRecovery,
 } from "../src/domain/systemHealth.js";
 import { classifyDocument, listExpiringDocuments, readDocumentFile, registerDocument, uploadDocument } from "../src/domain/documents.js";
+import { registerUser } from "../src/domain/users.js";
 
 process.env.UPLOAD_DIR = path.join(os.tmpdir(), "dcentral-fieldops-test-uploads");
 
 let siteId: string;
 let crewId: string;
+let userId: string;
+let userDid: string;
 const createdCrewIds: string[] = [];
 const createdCrewDids: string[] = [];
 const createdSiteIds: string[] = [];
@@ -74,6 +77,10 @@ beforeAll(async () => {
   crewId = crew.id;
   createdCrewIds.push(crew.id);
   createdCrewDids.push(crew.did);
+
+  const user = await registerUser({ email: "qa-alerts-admin@example.test", name: "QA Alerts Admin", password: "correct-password-123", role: "admin" });
+  userId = user.id;
+  userDid = user.did;
 });
 
 afterAll(async () => {
@@ -89,6 +96,10 @@ afterAll(async () => {
   await pool.query("DELETE FROM notifications WHERE id = ANY($1) OR source_id = ANY($2)", [createdNotificationIds, createdAlertIds]);
   await pool.query("DELETE FROM alerts WHERE id = ANY($1)", [createdAlertIds]);
   await pool.query("DELETE FROM sites WHERE id = ANY($1)", [createdSiteIds]);
+  await pool.query("DELETE FROM capability_grants WHERE subject_did = $1", [userDid]);
+  await pool.query("DELETE FROM verifiable_credentials WHERE subject_did = $1", [userDid]);
+  await pool.query("DELETE FROM keys WHERE did = $1", [userDid]);
+  await pool.query("DELETE FROM users WHERE id = $1", [userId]);
   await pool.query("DELETE FROM capability_grants WHERE subject_did = ANY($1)", [createdCrewDids]);
   await pool.query("DELETE FROM verifiable_credentials WHERE subject_did = ANY($1)", [createdCrewDids]);
   await pool.query("DELETE FROM keys WHERE did = ANY($1)", [createdCrewDids]);
@@ -123,7 +134,7 @@ describe("alerts", () => {
     expect(second.created).toBe(false);
     expect(second.alert.id).toBe(first.alert.id);
 
-    await resolveAlert(first.alert.id, crewId);
+    await resolveAlert(first.alert.id, { crewMemberId: crewId });
     const third = await raiseAlert({ type: "maintenance_due", relatedRecordId: asset.id, summary: "third (after resolve)" });
     createdAlertIds.push(third.alert.id);
     expect(third.created).toBe(true);
@@ -134,15 +145,26 @@ describe("alerts", () => {
     const { alert } = await raiseAlert({ type: "idle", relatedRecordId: crewId, summary: "idle test" });
     createdAlertIds.push(alert.id);
 
-    const first = await resolveAlert(alert.id, crewId);
+    const first = await resolveAlert(alert.id, { crewMemberId: crewId });
     expect(first.ok).toBe(true);
-    const second = await resolveAlert(alert.id, crewId);
+    const second = await resolveAlert(alert.id, { crewMemberId: crewId });
     expect(second.ok).toBe(false);
     if (!second.ok) expect(second.reason).toBe("already_resolved");
 
-    const missing = await resolveAlert("00000000-0000-0000-0000-000000000000", crewId);
+    const missing = await resolveAlert("00000000-0000-0000-0000-000000000000", { crewMemberId: crewId });
     expect(missing.ok).toBe(false);
     if (!missing.ok) expect(missing.reason).toBe("not_found");
+  });
+
+  it("a dashboard user can resolve an alert too -- resolved_by_user_id set, resolved_by left null", async () => {
+    const { alert } = await raiseAlert({ type: "idle", relatedRecordId: crewId, summary: "idle test, dashboard resolve" });
+    createdAlertIds.push(alert.id);
+
+    const result = await resolveAlert(alert.id, { userId });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.alert.resolved_by_user_id).toBe(userId);
+    expect(result.alert.resolved_by).toBeNull();
   });
 
   it("a null related_record_id never dedups -- every call creates a fresh alert", async () => {
@@ -188,15 +210,29 @@ describe("notifications", () => {
     const afterEscalate = await pool.query("SELECT escalated_count FROM notifications WHERE id = $1", [notificationId]);
     expect(afterEscalate.rows[0].escalated_count).toBe(1);
 
-    const ack = await acknowledgeNotification(notificationId, crewId);
+    const ack = await acknowledgeNotification(notificationId, { crewMemberId: crewId });
     expect(ack.ok).toBe(true);
-    const doubleAck = await acknowledgeNotification(notificationId, crewId);
+    const doubleAck = await acknowledgeNotification(notificationId, { crewMemberId: crewId });
     expect(doubleAck.ok).toBe(false);
     if (!doubleAck.ok) expect(doubleAck.reason).toBe("already_acknowledged");
 
     // Acknowledged -- no longer a candidate even if otherwise due.
     const candidatesAfterAck = await listEscalationCandidates(20, 3);
     expect(candidatesAfterAck.map((n) => n.id)).not.toContain(notificationId);
+  });
+
+  it("a dashboard user can acknowledge a notification too -- acknowledged_by_user_id set, acknowledged_by left null", async () => {
+    const { alert } = await raiseAlert({ type: "overdue", summary: "dashboard ack test" });
+    createdAlertIds.push(alert.id);
+    const notificationRow = await pool.query("SELECT id FROM notifications WHERE source_id = $1", [alert.id]);
+    const notificationId = notificationRow.rows[0].id as string;
+    createdNotificationIds.push(notificationId);
+
+    const result = await acknowledgeNotification(notificationId, { userId });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.notification.acknowledged_by_user_id).toBe(userId);
+    expect(result.notification.acknowledged_by).toBeNull();
   });
 });
 

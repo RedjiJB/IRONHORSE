@@ -182,7 +182,7 @@ export function registerNotificationTools(server: McpServer): void {
     async ({ credentialJwt, id, acknowledgedByCrewMemberId }) => {
       try {
         await requireCapability(credentialJwt, "mcp:tool:acknowledge_notification", 2);
-        const result = await acknowledgeNotification(id, acknowledgedByCrewMemberId);
+        const result = await acknowledgeNotification(id, { crewMemberId: acknowledgedByCrewMemberId });
         if (!result.ok) return { content: [{ type: "text", text: `Denied: ${result.reason}` }], isError: true };
         return { content: [{ type: "text", text: JSON.stringify(result.notification) }] };
       } catch (err) {

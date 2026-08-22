@@ -19,6 +19,7 @@ export type Notification = {
   delivered_at: string | null;
   acknowledged_at: string | null;
   acknowledged_by: string | null;
+  acknowledged_by_user_id: string | null;
   whatsapp_message_id: string | null;
   escalated_count: number;
   last_escalated_at: string | null;
@@ -94,15 +95,15 @@ export async function escalateNotification(id: string): Promise<Notification | n
 // fixed." Same distinction v1 draws.
 export type AcknowledgeNotificationResult = { ok: true; notification: Notification } | { ok: false; reason: "not_found" | "already_acknowledged" };
 
-export async function acknowledgeNotification(id: string, acknowledgedByCrewMemberId: string): Promise<AcknowledgeNotificationResult> {
+export async function acknowledgeNotification(id: string, acknowledger: { crewMemberId?: string; userId?: string }): Promise<AcknowledgeNotificationResult> {
   const current = await pool.query("SELECT * FROM notifications WHERE id = $1", [id]);
   const notification = current.rows[0] as Notification | undefined;
   if (!notification) return { ok: false, reason: "not_found" };
   if (notification.acknowledged_at) return { ok: false, reason: "already_acknowledged" };
 
   const result = await pool.query(
-    "UPDATE notifications SET acknowledged_at = now(), acknowledged_by = $2 WHERE id = $1 RETURNING *",
-    [id, acknowledgedByCrewMemberId],
+    "UPDATE notifications SET acknowledged_at = now(), acknowledged_by = $2, acknowledged_by_user_id = $3 WHERE id = $1 RETURNING *",
+    [id, acknowledger.crewMemberId ?? null, acknowledger.userId ?? null],
   );
   return { ok: true, notification: result.rows[0] as Notification };
 }

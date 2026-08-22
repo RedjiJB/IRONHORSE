@@ -59,8 +59,14 @@ export async function endTrip(tripId: string): Promise<EndTripResult> {
   if (!trip) return { ok: false, reason: "not_found" };
   if (trip.ended_at) return { ok: false, reason: "already_ended" };
 
-  const endedAt = new Date();
-  const durationSeconds = Math.round((endedAt.getTime() - new Date(trip.started_at).getTime()) / 1000);
+  // Both timestamps must come from the same clock -- comparing a JS
+  // Date.now() against a Postgres-originated started_at risks a spurious
+  // negative duration under any clock skew between the app and DB hosts.
+  // Pulling "now" from Postgres itself, same as started_at, eliminates
+  // that entirely.
+  const nowRow = await pool.query("SELECT now() AS now");
+  const endedAt = nowRow.rows[0].now as Date;
+  const durationSeconds = Math.max(0, Math.round((endedAt.getTime() - new Date(trip.started_at).getTime()) / 1000));
 
   const points = await pool.query(
     `SELECT lat, lng FROM vehicle_telemetry WHERE vehicle_id = $1 AND "timestamp" >= $2 AND "timestamp" <= $3 ORDER BY "timestamp"`,

@@ -51,6 +51,7 @@ export type Alert = {
   raised_at: string;
   resolved_at: string | null;
   resolved_by: string | null;
+  resolved_by_user_id: string | null;
 };
 
 export type RaiseAlertResult = { alert: Alert; created: boolean };
@@ -109,15 +110,15 @@ export async function raiseAlert(args: {
 
 export type ResolveAlertResult = { ok: true; alert: Alert } | { ok: false; reason: "not_found" | "already_resolved" };
 
-export async function resolveAlert(id: string, resolvedByCrewMemberId: string): Promise<ResolveAlertResult> {
+export async function resolveAlert(id: string, resolver: { crewMemberId?: string; userId?: string }): Promise<ResolveAlertResult> {
   const current = await pool.query("SELECT * FROM alerts WHERE id = $1", [id]);
   const alert = current.rows[0] as Alert | undefined;
   if (!alert) return { ok: false, reason: "not_found" };
   if (alert.resolved_at) return { ok: false, reason: "already_resolved" };
 
   const result = await pool.query(
-    `UPDATE alerts SET resolved_at = now(), resolved_by = $2 WHERE id = $1 RETURNING *`,
-    [id, resolvedByCrewMemberId],
+    `UPDATE alerts SET resolved_at = now(), resolved_by = $2, resolved_by_user_id = $3 WHERE id = $1 RETURNING *`,
+    [id, resolver.crewMemberId ?? null, resolver.userId ?? null],
   );
   return { ok: true, alert: result.rows[0] as Alert };
 }
