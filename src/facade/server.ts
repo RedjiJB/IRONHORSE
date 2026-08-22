@@ -15,6 +15,7 @@ import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerEquipmentRoutes } from "./routes/equipment.js";
 import { registerSiteInventoryRoutes } from "./routes/siteInventory.js";
 import { registerProcurementRoutes } from "./routes/procurement.js";
+import { registerPayrollRoutes } from "./routes/payroll.js";
 
 export function buildFacadeServer(): Server {
   const router = new Router();
@@ -23,6 +24,7 @@ export function buildFacadeServer(): Server {
   registerEquipmentRoutes(router);
   registerSiteInventoryRoutes(router);
   registerProcurementRoutes(router);
+  registerPayrollRoutes(router);
 
   return createServer((req, res) => {
     router.dispatch(req, res).then((handled) => {

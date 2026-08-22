@@ -36,6 +36,14 @@ export async function getCrewPayProfile(crewMemberId: string): Promise<CrewPayPr
   return (result.rows[0] as CrewPayProfile) ?? null;
 }
 
+// Everyone whose pay has been configured at all -- the REST façade's
+// payroll view builds its entry list from this set, not every crew
+// member regardless of whether they're even set up for payroll.
+export async function listCrewPayProfiles(): Promise<CrewPayProfile[]> {
+  const result = await pool.query("SELECT * FROM crew_pay_profiles");
+  return result.rows as CrewPayProfile[];
+}
+
 export type Payout = {
   id: string;
   crew_member_id: string;
