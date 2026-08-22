@@ -2,6 +2,16 @@
 
 D-Central-native successor to `fieldops-system` (v1) — built clean-slate per the approved plan (see the plan file this session was built from). v1 stays live for Sod Boys Ltd throughout this build; nothing here touches it.
 
+## Status (2026-08-22, Task #156 slice D: equipment/fleet)
+
+`src/facade/routes/equipment.ts` maps `vehicles.ts` (a 4-column table: plate, assigned driver, mileage, latest telemetry) onto the vendored frontend's much richer `Equipment` type (manufacturer/model/serial/year, financial/depreciation fields, a real status/ownership/type taxonomy) — exact field names confirmed by reading the frontend's own `src/features/equipment/api.ts`, not guessed. List/get/create/update/telemetry-list are built; `updateVehicle`/no-delete decisions and the status/type/ownership filter emulation (fixed stub values — anything else returns empty rather than querying columns that don't exist) are documented in the route file itself.
+
+Real browser verification against the actual Equipment & Fleet page confirmed the core flow works — a registered vehicle with logged telemetry showed up correctly in the real table (plate, type, status, location, hour count) and the page's live stats. It also confirmed the *other* half of the plan's degradation bet: the Fleet Optimization panel's request (`GET /v1/equipment/dashboard/fleet/optimization`, deliberately not built — no algorithm or data exists to back it) 404s in isolation without breaking the rest of the page, exactly as the scope table anticipated.
+
+Deliberately not built (no domain backing, and faking analytics would be worse than an isolated 404): maintenance work orders, inspections, damage reports, health-analytics/failure-forecast/fleet-optimization. `DELETE` is also omitted — hard-deleting a vehicle with existing trips/telemetry rows has real FK-cascade risk and no clear domain semantic (unlike assets, vehicles have no "retired" status to move to instead).
+
+119/119 tests passing (`test/facade.equipment.test.ts`).
+
 ## Status (2026-08-22, Task #156 slices A–C: REST façade infra, auth, and notifications)
 
 Full plan and per-module scope table: `docs/ARCHITECTURE.md`'s own history / the approved plan file this build tracks. Summary of what's landed:

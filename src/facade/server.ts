@@ -12,11 +12,13 @@ import { Router } from "./router.js";
 import { sendJson } from "./context.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
+import { registerEquipmentRoutes } from "./routes/equipment.js";
 
 export function buildFacadeServer(): Server {
   const router = new Router();
   registerAuthRoutes(router);
   registerNotificationRoutes(router);
+  registerEquipmentRoutes(router);
 
   return createServer((req, res) => {
     router.dispatch(req, res).then((handled) => {

@@ -87,3 +87,18 @@ export async function getVehicle(id: string): Promise<VehicleWithLatestLocation 
   );
   return (result.rows[0] as VehicleWithLatestLocation) ?? null;
 }
+
+// Only supplied fields change -- COALESCE against the existing row, same
+// partial-update shape used elsewhere in this codebase (e.g.
+// notificationSettings.ts).
+export async function updateVehicle(id: string, patch: { plate?: string; assignedCrewId?: string; currentMileage?: number }): Promise<Vehicle | null> {
+  const result = await pool.query(
+    `UPDATE vehicles SET
+       plate = COALESCE($2, plate),
+       assigned_crew_id = COALESCE($3, assigned_crew_id),
+       current_mileage = COALESCE($4, current_mileage)
+     WHERE id = $1 RETURNING *`,
+    [id, patch.plate ?? null, patch.assignedCrewId ?? null, patch.currentMileage ?? null],
+  );
+  return (result.rows[0] as Vehicle) ?? null;
+}
