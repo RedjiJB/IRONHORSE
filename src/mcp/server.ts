@@ -17,6 +17,11 @@ import { registerPurchaseOrderTools } from "./tools/purchaseOrders.js";
 import { registerVehicleTools } from "./tools/vehicles.js";
 import { registerTelemetryTools } from "./tools/telemetry.js";
 import { registerTripTools } from "./tools/trips.js";
+import { registerAlertTools } from "./tools/alerts.js";
+import { registerNotificationTools } from "./tools/notifications.js";
+import { registerSystemHealthTools } from "./tools/systemHealth.js";
+import { registerDocumentTools } from "./tools/documents.js";
+import { registerJobTools } from "./tools/jobs.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "dcentral-fieldops", version: "0.1.0" });
@@ -38,6 +43,11 @@ export function buildMcpServer(): McpServer {
   registerVehicleTools(server);
   registerTelemetryTools(server);
   registerTripTools(server);
+  registerAlertTools(server);
+  registerNotificationTools(server);
+  registerSystemHealthTools(server);
+  registerDocumentTools(server);
+  registerJobTools(server);
   return server;
 }
 

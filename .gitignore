@@ -19,3 +19,6 @@ Thumbs.db
 
 # didwebvh-ts writes DID-log artifacts here during test runs
 test/logs/
+
+# Uploaded documents (local filesystem storage, see src/domain/documents.ts)
+uploads/

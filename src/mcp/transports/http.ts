@@ -5,9 +5,11 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import { mcpServer } from "../server.js";
 import { buildDidDocument, didWebForAgent, didWebForDomain } from "../../identity/did.js";
 import { loadPublicJwk } from "../../identity/keys.js";
+import { startExceptionsWorker } from "../../domain/exceptions.js";
 
 const port = Number(process.env.MCP_HTTP_PORT ?? 8090);
 const domain = process.env.NODE_DID_DOMAIN;
+const alertsCheckIntervalMs = Number(process.env.ALERTS_CHECK_INTERVAL_MS ?? 5 * 60 * 1000);
 
 const handler = createMcpHandler(() => mcpServer, {
   onerror: (err) => console.error("[mcp-http]", err),
@@ -60,3 +62,5 @@ const server = createServer((req, res) => {
 server.listen(port, () => {
   console.log(`MCP Streamable HTTP server listening on :${port}`);
 });
+
+startExceptionsWorker(alertsCheckIntervalMs);

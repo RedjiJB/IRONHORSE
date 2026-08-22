@@ -20,6 +20,7 @@ export function registerShiftTools(server: McpServer): void {
         date: z.string().describe("ISO date, e.g. 2026-08-22"),
         startTime: z.string().optional().describe("HH:MM"),
         endTime: z.string().optional().describe("HH:MM"),
+        jobId: z.string().uuid().optional(),
       }),
     },
     async ({ credentialJwt, ...args }) => {

@@ -22,12 +22,13 @@ export async function assignShift(args: {
   date: string;
   startTime?: string;
   endTime?: string;
+  jobId?: string;
 }): Promise<Shift> {
   const result = await pool.query(
-    `INSERT INTO shifts (crew_member_id, site_id, date, start_time, end_time)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO shifts (crew_member_id, site_id, date, start_time, end_time, job_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [args.crewMemberId, args.siteId, args.date, args.startTime ?? null, args.endTime ?? null],
+    [args.crewMemberId, args.siteId, args.date, args.startTime ?? null, args.endTime ?? null, args.jobId ?? null],
   );
   return result.rows[0] as Shift;
 }

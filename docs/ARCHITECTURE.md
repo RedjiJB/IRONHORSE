@@ -2,6 +2,33 @@
 
 D-Central-native successor to `fieldops-system` (v1) — built clean-slate per the approved plan (see the plan file this session was built from). v1 stays live for Sod Boys Ltd throughout this build; nothing here touches it.
 
+## Status (2026-08-21, Phase 2 slice 5: alerts, notifications, documents)
+
+**Alerts, notifications, notification_settings, documents, the exceptions worker, and system self-monitoring** — re-expressed from v1's `fieldops-system` as the requirements baseline, not copied code. 5 new migrations (`0025`–`0029`), 6 new domain modules (`src/domain/alerts.ts`, `notifications.ts`, `notificationSettings.ts`, `exceptions.ts`, `systemHealth.ts`, `documents.ts`), 5 new MCP tool files. The largest slice yet, and closes out the deferred Phase 2 list except payroll/spending/dashboard-auth.
+
+**A real gap found and fixed along the way**: the `jobs` table has existed since Phase 2 slice 1, but nothing ever created a `jobs` row or linked a shift to one — meaning the `loadout_gap` alert (which requires a real job with a linked, confirmed shift) could never actually fire in practice. Added `src/domain/jobs.ts` (`createJob`/`getJob`/`listJobs`/`startJob`/`completeJob`) and an optional `jobId` on `assignShift`, closing this before building the check that depends on it.
+
+**Load-bearing rules carried forward from v1's requirements:**
+- **`alerts.related_record_id` stays a bare, untyped polymorphic UUID**, same real design smell v1 has — replicated faithfully (see `0025_alerts.sql`'s comment for the full type→table mapping) since every reader already has to know this mapping regardless of which system implements it.
+- **Dedup is real and atomic with notification creation**: `raiseAlert` runs the dedup check, the alert insert, and the notification insert in one transaction — an unresolved alert of the same type+related-record is returned as-is (no new notification), while a resolved one lets a fresh alert through.
+- **`notifications` is a single event log, not a per-recipient delivery table** — one row's `delivered_at`/`acknowledged_by` covers the whole recipient group ("management as a unit"), same real limitation v1 documents and defers (a true `notification_deliveries` table would be needed for per-recipient tracking).
+- **Escalation is flat re-paging of the same recipients**, not tiered — `listEscalationCandidates`/`escalateNotification` re-page the identical audience until acknowledged or `max_escalations` is hit, same as v1. `it_escalation_roles` vs. `critical_notification_roles` is the only "who" branching, decided once at raise-time.
+- **Acknowledgment and resolution are deliberately separate concepts** — `notifications.acknowledged_at` means "a human has seen this and is on it"; `alerts.resolved_at` means "the underlying problem is actually fixed." Nothing auto-resolves an alert on its root condition clearing, for every type except `weather`.
+- **`weather` is the one alert type with real self-healing behavior**: date-scoped, not open/resolved-scoped — any still-open weather alert from a prior day auto-resolves before the day's check runs, then `raiseAlert`'s own dedup naturally prevents re-raising the same day's alert twice. Fetches Open-Meteo (free, no key, per the already-`external_accepted` sovereignty-tier decision), fails silently on any error/timeout, and accepts an injectable `fetchForecast` so tests never hit the real network.
+- **System self-monitoring (`dashboard_unreachable`, `backup_failed`, `cron_job_failed`, `connectivity_degraded`, `disk_space_low`, `it_issue`, `system_offline`) is a genuinely different category** from the field-ops Postgres comparisons — these are ingestion points a deployment's own infra scripts (a host-side heartbeat, a nightly backup job) would call, not something a periodic DB query can detect on its own. Building those host-side scripts is Phase 3/deployment scope; what's built here (`src/domain/systemHealth.ts`) is the real, callable mechanism. `connectivity_degraded`/`disk_space_low` use fixed sentinel UUID constants (no real backing row, same as v1); `backup_failed`/`dashboard_unreachable` share one small `system_status` singleton row. `system_offline` structurally can never be raised live — it's always backfilled as a pre-resolved historical record once recovery is confirmed, same as v1.
+- **Documents use local filesystem storage** (`UPLOAD_DIR`), not S3 or base64-in-DB — `storage_path` is always a randomly generated filename, never derived from the caller-supplied original filename (the one deliberate security property carried forward: prevents path traversal from a malicious filename). MIME type is allowlist-enforced before anything is written to disk.
+- **`STALE_TELEMETRY_MINUTES` (60) and `VEHICLE_DARK_HOURS` (3) stay hardcoded constants**, not `notification_settings` columns — same as v1, on the reasoning that they're detection sensitivity, not a policy call. `daily_overtime_hours`/`break_required_after_hours` exist in the settings row but are deliberately not wired to any alert, matching v1 (payroll-review signal only).
+
+**Deliberate deviations from v1, closing gaps its own requirements flagged as real:**
+- **`alerts.severity` is now a real, persisted column**, not a value decided transiently in a Set at notification-creation time and never stored on the alert itself. v1's own requirements research called this out directly: "a real design gap worth fixing in the rewrite."
+- **The `jobs`/`assignShift` gap above** — v1 doesn't have this problem (its `loadout_gap` worked against real job data); this is specifically a gap introduced by this project's own earlier slice, now closed.
+
+**Where v1's requirements research didn't state an explicit severity verdict** (`wrong_site`, `weather`, `crew_off_site`, `crew_location_stale`, and the system self-monitoring types), a judgment call was made and documented inline in `DEFAULT_SEVERITY` (`src/domain/alerts.ts`) — grouped with the other real operational-deviation/safety checks as `critical`, consistent with how they're each routed (immediate paging, not digest-only).
+
+**Deliberately not built this slice**: the actual host-side delivery poller (WhatsApp send via OpenClaw), the heartbeat/backup-cron scripts that would call `systemHealth.ts`'s report functions, and the dashboard's own document-serving UI — all Phase 3 (OpenClaw wiring) or deployment-infra scope. What's built is the real mechanism each of those would call into, not the external process itself, same pattern as `log_vehicle_location`/geocoding in the fleet slice.
+
+**Verified live — all 10 test files, 80/80 tests passing, confirmed clean residue** (`test/domain.alerts-notifications-documents.test.ts`, 19 new tests covering dedup, the full notification lifecycle, five representative exceptions-worker checks including weather's self-heal, system self-monitoring's sentinel-id dedup, and the document upload security properties).
+
 ## Status (2026-08-21, Phase 2 slice 4: fleet/vehicles)
 
 **Vehicles, vehicle_telemetry, crew_telemetry, and trips** — re-expressed from v1's `fieldops-system` as the requirements baseline, not copied code. 4 new migrations (`0021`–`0024`), 3 new domain modules (`src/domain/vehicles.ts`, `telemetry.ts`, `trips.ts`), 3 new MCP tool files. Fully separate from the inventory/logistics slice — no shared table with `assets`/`checkouts`.
@@ -84,7 +111,7 @@ npm run sync:policy   # after setting reviewed_by/reviewed_at in policy/sovereig
 npm test
 ```
 
-**Deferred, not lost** (see the project's task list): ~~assets/consumables/loadouts/checkouts/orders/transfers/vendors/purchase_orders~~ (done, Phase 2 slice 3), ~~vehicles/vehicle_telemetry/trips~~ (done, Phase 2 slice 4, see above), documents, the alerts/exceptions engine, notifications, payroll, spending, and dashboard auth (users/sessions) are all still v1-only. This slice is the dispatch backbone, not full parity yet.
+**Deferred, not lost** (see the project's task list): ~~assets/consumables/loadouts/checkouts/orders/transfers/vendors/purchase_orders~~ (done, Phase 2 slice 3), ~~vehicles/vehicle_telemetry/trips~~ (done, Phase 2 slice 4), ~~documents, the alerts/exceptions engine, notifications~~ (done, Phase 2 slice 5, see above) — only payroll, spending, and dashboard auth (users/sessions) remain v1-only. This slice is the dispatch backbone, not full parity yet.
 
 ## Status (2026-08-21, Phase 1 — historical, superseded by the section above)
 
