@@ -87,6 +87,41 @@ export async function compilePurchaseOrder(orderId: string, vendorId?: string): 
   }
 }
 
+// A purchase order not derived from a crew-submitted order request --
+// e.g. a dashboard admin ordering supplies directly. order_id and each
+// item's order_item_id stay null, which the schema already allows (this
+// isn't a new relaxation, just a path that was always legal but only
+// compilePurchaseOrder ever used before the REST façade needed a second
+// creation path with no backing order to compile from).
+export async function createFreeformPurchaseOrder(args: {
+  vendorId?: string;
+  cost?: number;
+  items: { description: string; quantity?: number }[];
+}): Promise<PurchaseOrder> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const poRow = await client.query(
+      `INSERT INTO purchase_orders (vendor_id, cost) VALUES ($1, $2) RETURNING *`,
+      [args.vendorId ?? null, args.cost ?? null],
+    );
+    const purchaseOrderId = poRow.rows[0].id as string;
+    for (const item of args.items) {
+      await client.query(
+        `INSERT INTO purchase_order_items (purchase_order_id, description, quantity) VALUES ($1, $2, $3)`,
+        [purchaseOrderId, item.description, item.quantity ?? null],
+      );
+    }
+    await client.query("COMMIT");
+    return poRow.rows[0] as PurchaseOrder;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export type SendPurchaseOrderResult =
   | { ok: true; purchaseOrder: PurchaseOrder }
   | { ok: false; reason: "not_found" | "not_compiled" };
