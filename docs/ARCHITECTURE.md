@@ -2,6 +2,28 @@
 
 D-Central-native successor to `fieldops-system` (v1) — built clean-slate per the approved plan (see the plan file this session was built from). v1 stays live for Sod Boys Ltd throughout this build; nothing here touches it.
 
+## Status (2026-08-21, Phase 2 slice 3: inventory/logistics)
+
+**Vendors, assets, consumables, loadouts, checkouts, orders, transfers, and purchase orders** — re-expressed from v1's `fieldops-system` as the requirements baseline (its documented schema shapes and business rules), not copied code. 8 new migrations (`0013`–`0020`), 8 new domain modules (`src/domain/vendors.ts`, `assets.ts`, `consumables.ts`, `loadouts.ts`, `checkouts.ts`, `orders.ts`, `transfers.ts`, `purchaseOrders.ts`), 8 new MCP tool files exposing ~30 tools.
+
+**Load-bearing rules carried forward from v1's requirements:**
+- **Assets are never usable until physically verified once.** New assets always start `unconfirmed`; `available` is reachable *only* through the two-party confirm-before-execute `asset_verification` flow — `set_asset_status` explicitly excludes `available` (and `checked_out`, which is only entered/exited through the checkout lifecycle) from what it can set directly.
+- **Double-checkout of the same asset is structurally impossible**: `createCheckout` runs inside a transaction with a row lock on the asset and requires `status = 'available'`, same mechanism v1 used.
+- **`stocked` vs `per_job_delivery` consumables**: only `stocked` types have a real `quantity_on_hand`, adjusted by signed delta through the two-party `consumable_adjustment` flow (a crew member's own usage report isn't trusted alone); `per_job_delivery` types never track quantity at all — real pricing lives on `order_items.unit_cost`, not a static catalog field.
+- **`loadout_items`/`order_items`' "exactly one of asset/consumable"** is enforced by a real DB `CHECK` constraint here, not just an app-layer validation like v1's.
+- **Forward-only status enums** for orders/transfers/purchase orders, same pattern as v1 (row-locked, index-compared, no skipping back).
+- **Four confirm-before-execute action types added this slice** — `asset_verification`, `consumable_adjustment`, `checkout_return` (damage/condition claims), `purchase_order_fulfillment` (delivery-receipt claims) — using the same registry `src/domain/confirmations.ts` already provides, no changes needed to that layer.
+
+**Deliberate deviations from v1, not scope creep — closing gaps v1's own requirements research flagged as real:**
+- **Added a `cancelled` terminal status** to `order_status`, `transfer_status`, and `po_status` — v1's own enums are forward-only with no void/cancel state at all, a documented real gap ("no 'cancelled' status exists anywhere in v1").
+- **One executor implementation per confirmable action**, not two — v1 duplicates the state-transition logic between its direct dashboard route and its confirm-before-execute approval path (e.g. `approveCheckoutReturn` mirrors `PATCH /checkouts/:id/return` almost verbatim). This system's `registerConfirmationExecutor` pattern means there is exactly one implementation per action, invoked only on approval.
+- **`purchase_orders.fulfilled_by` records the submitter, not the approving reviewer** — v1 credits the manager who approved a delivery-receipt claim; this system's confirmation executor signature only ever receives the submitted payload, consistently across every confirmable action type, so `fulfilled_by` follows the same submitter-attributed convention as `checkout_return`/`asset_verification`. "Who approved it" isn't lost — it's on `pending_confirmations.reviewed_by`, just not duplicated onto the domain row.
+- **No dual-actor (`X_by`/`X_by_user_id`) column pairs yet** — v1 has these because it has a dashboard-user identity distinct from a crew member's identity. That auth model doesn't exist yet here (deferred to the payroll/spending/dashboard-auth slice); a single crew-member FK is correct for now.
+
+**Deliberately not built this slice** (the alerts/exceptions engine is separate, deferred scope, tackled next as its own cluster): `overdue`/`loadout_gap`/`maintenance_due`/`order_stalled` alert generation. The plain queries those alerts will eventually run on (`listOverdueCheckouts`, `resolveNextServiceDue`) already exist as domain functions, usable today without waiting on that worker.
+
+**Verified live — all 8 test files, 54/54 tests passing, confirmed clean residue across every new table** (`test/domain.inventory-logistics.test.ts`, 17 new tests covering the rules above).
+
 ## Status (2026-08-21, Phase 2 slice 2: crew members are DID-based identities)
 
 **Reverses a Phase 2 slice 1 decision, by explicit instruction: crew members are no longer phone-only.** "Everyone and everything gets DIDs, VCs, capability [grants] — this is a zero trust system" — every crew member now gets a real `did:web:<domain>:crew:<uuid>`, custodially held (the node generates and stores the keypair; a crew member interacts purely through WhatsApp text, with no wallet of their own). The phone number is demoted from primary identity to a signed `PhoneBinding` verifiable credential bound to that DID — a verifiable claim, not a bare column value.
@@ -46,7 +68,7 @@ npm run sync:policy   # after setting reviewed_by/reviewed_at in policy/sovereig
 npm test
 ```
 
-**Deferred, not lost** (see the project's task list): assets/consumables/loadouts/checkouts/orders/transfers/vendors/purchase_orders, vehicles/vehicle_telemetry/trips, documents, the alerts/exceptions engine, notifications, payroll, spending, and dashboard auth (users/sessions) are all still v1-only. This slice is the dispatch backbone, not full parity yet.
+**Deferred, not lost** (see the project's task list): ~~assets/consumables/loadouts/checkouts/orders/transfers/vendors/purchase_orders~~ (done, Phase 2 slice 3, see above), vehicles/vehicle_telemetry/trips, documents, the alerts/exceptions engine, notifications, payroll, spending, and dashboard auth (users/sessions) are all still v1-only. This slice is the dispatch backbone, not full parity yet.
 
 ## Status (2026-08-21, Phase 1 — historical, superseded by the section above)
 

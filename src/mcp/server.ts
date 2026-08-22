@@ -6,6 +6,14 @@ import { registerJobTypeTools } from "./tools/jobTypes.js";
 import { registerShiftTools } from "./tools/shifts.js";
 import { registerTimeclockTools } from "./tools/timeclock.js";
 import { registerConfirmationTools } from "./tools/confirmations.js";
+import { registerVendorTools } from "./tools/vendors.js";
+import { registerAssetTools } from "./tools/assets.js";
+import { registerConsumableTools } from "./tools/consumables.js";
+import { registerLoadoutTools } from "./tools/loadouts.js";
+import { registerOrderTools } from "./tools/orders.js";
+import { registerCheckoutTools } from "./tools/checkouts.js";
+import { registerTransferTools } from "./tools/transfers.js";
+import { registerPurchaseOrderTools } from "./tools/purchaseOrders.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "dcentral-fieldops", version: "0.1.0" });
@@ -16,6 +24,14 @@ export function buildMcpServer(): McpServer {
   registerShiftTools(server);
   registerTimeclockTools(server); // also registers the timeclock_event confirmation executor
   registerConfirmationTools(server);
+  registerVendorTools(server);
+  registerAssetTools(server); // also registers the asset_verification confirmation executor
+  registerConsumableTools(server); // also registers the consumable_adjustment confirmation executor
+  registerLoadoutTools(server);
+  registerOrderTools(server);
+  registerCheckoutTools(server); // also registers the checkout_return confirmation executor
+  registerTransferTools(server);
+  registerPurchaseOrderTools(server); // also registers the purchase_order_fulfillment confirmation executor
   return server;
 }
 
