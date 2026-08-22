@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "D-Central-native successor to fieldops-system -- self-built did:web/JWT-VC identity (no Veramo), MCP integration surface, capability-tiered authorization. Phase 1: foundational skeleton, no domain logic yet.",
+  "description": "D-Central-native successor to fieldops-system -- self-built did:web/JWT-VC identity (no Veramo), MCP integration surface, capability-tiered authorization. Phase 2 complete: full domain parity with v1 (crew/dispatch, inventory, fleet, alerts, payroll). REST façade in progress (Task #156).",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
@@ -12,6 +12,7 @@
     "bootstrap:node": "tsx src/identity/bootstrapNode.ts",
     "mcp:stdio": "tsx src/mcp/transports/stdio.ts",
     "mcp:http": "tsx src/mcp/transports/http.ts",
+    "facade:http": "tsx watch src/facade/server.ts",
     "test": "vitest run"
   },
   "dependencies": {
