@@ -25,13 +25,23 @@ import type { Router } from "../router.js";
 import { getQueryInt, getQueryParam, readJsonBody, sendError, sendJson } from "../context.js";
 import { requireStaffRole } from "../auth.js";
 import { getVehicle, listVehicles, registerVehicle, updateVehicle, type VehicleWithLatestLocation } from "../../domain/vehicles.js";
-import { listVehicleTelemetry } from "../../domain/telemetry.js";
+import { listVehicleTelemetry, ensureVehicleTelemetryAddress } from "../../domain/telemetry.js";
 
 const STUB_TYPE_CODE = "vehicle";
 const STUB_OWNERSHIP = "owned";
 const STUB_STATUS = "active";
 
-function toFrontendShape(v: VehicleWithLatestLocation) {
+// The vendored frontend's Equipment type has no address field at all --
+// it only ever showed raw coordinates. Rather than add a field to that
+// shared type for one module, the reverse-geocoded address rides in
+// `metadata.address`, which EquipmentPage.tsx reads directly (see the
+// façade slice's own file header convention: fields with no backing
+// type go in metadata, not invented onto the contract).
+async function toFrontendShape(v: VehicleWithLatestLocation) {
+  let address = v.latest_location?.address ?? null;
+  if (!address && v.latest_location) {
+    address = await ensureVehicleTelemetryAddress(v.latest_location.id, v.latest_location.lat, v.latest_location.lng);
+  }
   return {
     id: v.id,
     code: v.plate,
@@ -55,7 +65,7 @@ function toFrontendShape(v: VehicleWithLatestLocation) {
     residual_value: null,
     currency: "USD",
     notes: null,
-    metadata: {},
+    metadata: address ? { address } : {},
     created_at: v.created_at,
     updated_at: v.created_at,
   };
@@ -85,7 +95,7 @@ export function registerEquipmentRoutes(router: Router): void {
       const all = await listVehicles();
       const total = all.length;
       const page = all.slice(offset, offset + limit);
-      sendJson(res, 200, { items: page.map(toFrontendShape), total, offset, limit });
+      sendJson(res, 200, { items: await Promise.all(page.map(toFrontendShape)), total, offset, limit });
     } catch (err) {
       sendError(res, err);
     }
@@ -99,7 +109,7 @@ export function registerEquipmentRoutes(router: Router): void {
         sendJson(res, 404, { detail: "Not found" });
         return;
       }
-      sendJson(res, 200, toFrontendShape(vehicle));
+      sendJson(res, 200, await toFrontendShape(vehicle));
     } catch (err) {
       sendError(res, err);
     }
@@ -115,7 +125,7 @@ export function registerEquipmentRoutes(router: Router): void {
       }
       const vehicle = await registerVehicle({ plate: body.code, currentMileage: body.odometer_km });
       const withLocation = await getVehicle(vehicle.id);
-      sendJson(res, 200, toFrontendShape(withLocation!));
+      sendJson(res, 200, await toFrontendShape(withLocation!));
     } catch (err) {
       sendError(res, err);
     }
@@ -131,7 +141,7 @@ export function registerEquipmentRoutes(router: Router): void {
         return;
       }
       const withLocation = await getVehicle(id);
-      sendJson(res, 200, toFrontendShape(withLocation!));
+      sendJson(res, 200, await toFrontendShape(withLocation!));
     } catch (err) {
       sendError(res, err);
     }

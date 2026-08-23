@@ -13,7 +13,13 @@ import { pool } from "../src/db/pool.js";
 import { registerCrewMember } from "../src/domain/crewMembers.js";
 import { registerSite } from "../src/domain/sites.js";
 import { getVehicle, listVehicles, registerVehicle } from "../src/domain/vehicles.js";
-import { listVehicleTelemetry, logLocationShare, logVehicleTelemetry } from "../src/domain/telemetry.js";
+import { ensureVehicleTelemetryAddress, listVehicleTelemetry, logLocationShare, logVehicleTelemetry, type ReverseGeocode } from "../src/domain/telemetry.js";
+
+// Real geocoding hits Nominatim over the network -- slow, rate-limited,
+// and unrelated to what these tests assert (the reuse-if-nearby cache
+// logic, not geocoding accuracy). Inject a no-op so every telemetry
+// write in this file resolves instantly and deterministically.
+const noGeocode: ReverseGeocode = async () => null;
 import { endTrip, listTrips, startTrip } from "../src/domain/trips.js";
 
 let driverId: string;
@@ -68,7 +74,7 @@ describe("vehicles", () => {
     const fresh = await getVehicle(vehicle.id);
     expect(fresh?.latest_location).toBeNull();
 
-    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.4215, lng: -75.6972 });
+    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.4215, lng: -75.6972 }, noGeocode);
     const withLocation = await getVehicle(vehicle.id);
     expect(withLocation?.latest_location).toMatchObject({ lat: 45.4215, lng: -75.6972 });
 
@@ -82,14 +88,15 @@ describe("telemetry", () => {
     const vehicle = await registerVehicle({ plate: "QA-TEST-002" });
     createdVehicleIds.push(vehicle.id);
 
-    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.4215, lng: -75.6972, address: "123 Test St" });
+    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.4215, lng: -75.6972, address: "123 Test St" }, noGeocode);
 
     // ~11m away -- within the 100m reuse radius, no address supplied.
-    const nearby = await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.42159, lng: -75.6972 });
+    const nearby = await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.42159, lng: -75.6972 }, noGeocode);
     expect(nearby.address).toBe("123 Test St");
 
-    // ~2.2km away -- well outside the reuse radius, no address supplied.
-    const far = await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.44, lng: -75.72 });
+    // ~2.2km away -- well outside the reuse radius, no address supplied,
+    // and the injected geocoder always returns null too.
+    const far = await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.44, lng: -75.72 }, noGeocode);
     expect(far.address).toBeNull();
   });
 
@@ -97,13 +104,33 @@ describe("telemetry", () => {
     const vehicle = await registerVehicle({ plate: "QA-TEST-003", assignedCrewId: driverId });
     createdVehicleIds.push(vehicle.id);
 
-    const withVehicle = await logLocationShare({ crewMemberId: driverId, lat: 45.4215, lng: -75.6972 });
+    const withVehicle = await logLocationShare({ crewMemberId: driverId, lat: 45.4215, lng: -75.6972 }, noGeocode);
     expect(withVehicle.crewTelemetry).toBeTruthy();
     expect(withVehicle.vehicleTelemetry?.vehicle_id).toBe(vehicle.id);
 
-    const withoutVehicle = await logLocationShare({ crewMemberId: passengerId, lat: 45.4215, lng: -75.6972 });
+    const withoutVehicle = await logLocationShare({ crewMemberId: passengerId, lat: 45.4215, lng: -75.6972 }, noGeocode);
     expect(withoutVehicle.crewTelemetry).toBeTruthy();
     expect(withoutVehicle.vehicleTelemetry).toBeNull();
+  });
+
+  it("falls back to reverse geocoding when no cached address is nearby, and never re-resolves an address that's already set", async () => {
+    const vehicle = await registerVehicle({ plate: "QA-TEST-008" });
+    createdVehicleIds.push(vehicle.id);
+
+    const fakeGeocode: ReverseGeocode = async (lat, lng) => `${lat},${lng} (fake address)`;
+    const point = await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.5, lng: -75.5 }, fakeGeocode);
+    expect(point.address).toBe("45.5,-75.5 (fake address)");
+
+    // ensureVehicleTelemetryAddress is the façade's read-path backfill for
+    // a row that predates this feature -- a no-op once the row already
+    // has an address (its UPDATE is WHERE address IS NULL), so a
+    // geocoder that would return something different here proves the
+    // no-op, not just a lucky match.
+    const differentAddress: ReverseGeocode = async () => "should never be written";
+    const resolved = await ensureVehicleTelemetryAddress(point.id, point.lat, point.lng, differentAddress);
+    expect(resolved).toBe("should never be written"); // the function's own return value, not what got persisted
+    const [refetched] = await listVehicleTelemetry(vehicle.id);
+    expect(refetched?.address).toBe("45.5,-75.5 (fake address)"); // unchanged in the DB
   });
 });
 
@@ -130,8 +157,8 @@ describe("trips", () => {
     if (!trip.ok) return;
     createdTripIds.push(trip.trip.id);
 
-    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.4215, lng: -75.6972 });
-    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.43, lng: -75.7 });
+    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.4215, lng: -75.6972 }, noGeocode);
+    await logVehicleTelemetry({ vehicleId: vehicle.id, lat: 45.43, lng: -75.7 }, noGeocode);
 
     const points = await listVehicleTelemetry(vehicle.id);
     expect(points.length).toBe(2);

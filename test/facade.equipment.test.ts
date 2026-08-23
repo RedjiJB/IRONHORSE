@@ -94,6 +94,11 @@ describe("GET /api/v1/equipment/equipment", () => {
     const created = await create.json();
     createdVehicleIds.push(created.id);
 
+    // No fake geocoder injected here (unlike domain.fleet-vehicles.test.ts):
+    // this exercises the real façade route, which calls the real Nominatim
+    // reverse-geocoder with no test hook to override it. One real network
+    // call, gracefully a no-op on any failure -- nothing below asserts on
+    // the resolved address, only that the row is present.
     await logVehicleTelemetry({ vehicleId: created.id, lat: 45.4215, lng: -75.6972 });
 
     const res = await authed("/api/v1/equipment/equipment?limit=100&offset=0");

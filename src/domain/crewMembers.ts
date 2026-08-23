@@ -84,6 +84,39 @@ export async function registerCrewMember(args: { name: string; phone: string; ro
   }
 }
 
+export type CrewMemberWithLatestLocation = CrewMember & {
+  latest_location: { id: string; timestamp: string; lat: number; lng: number; source: string; address: string | null } | null;
+};
+
+// Mirrors vehicles.ts's listVehicles/getVehicle latest-location join
+// exactly (LEFT JOIN LATERAL against that module's own telemetry table) --
+// crew_members and crew_telemetry are two separate slices with no shared
+// table either, same reasoning as vehicles/vehicle_telemetry.
+export async function listCrewWithLatestLocation(filter?: { active?: boolean }): Promise<CrewMemberWithLatestLocation[]> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  if (filter?.active !== undefined) {
+    params.push(filter.active);
+    conditions.push(`c.active = $${params.length}`);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const result = await pool.query(
+    `SELECT c.*, t.latest_location
+     FROM crew_members c
+     LEFT JOIN LATERAL (
+       SELECT to_jsonb(ct) - 'crew_member_id' AS latest_location
+       FROM crew_telemetry ct
+       WHERE ct.crew_member_id = c.id
+       ORDER BY ct."timestamp" DESC
+       LIMIT 1
+     ) t ON true
+     ${where}
+     ORDER BY c.name`,
+    params,
+  );
+  return result.rows as CrewMemberWithLatestLocation[];
+}
+
 export async function listCrewMembers(filter?: { role?: CrewRole; active?: boolean }): Promise<CrewMember[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
