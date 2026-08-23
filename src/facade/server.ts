@@ -16,6 +16,9 @@ import { registerEquipmentRoutes } from "./routes/equipment.js";
 import { registerSiteInventoryRoutes } from "./routes/siteInventory.js";
 import { registerProcurementRoutes } from "./routes/procurement.js";
 import { registerPayrollRoutes } from "./routes/payroll.js";
+import { registerResourceRoutes } from "./routes/resources.js";
+import { registerTeamRoutes } from "./routes/teams.js";
+import { registerFieldTimeRoutes } from "./routes/fieldTime.js";
 
 export function buildFacadeServer(): Server {
   const router = new Router();
@@ -25,6 +28,9 @@ export function buildFacadeServer(): Server {
   registerSiteInventoryRoutes(router);
   registerProcurementRoutes(router);
   registerPayrollRoutes(router);
+  registerResourceRoutes(router);
+  registerTeamRoutes(router);
+  registerFieldTimeRoutes(router);
 
   return createServer((req, res) => {
     router.dispatch(req, res).then((handled) => {
