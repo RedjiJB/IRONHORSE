@@ -1,0 +1,8 @@
+[Unit]
+Description=dcentral-fieldops self-monitoring heartbeat
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/home/ubuntu/ops-scripts/ops-heartbeat.sh

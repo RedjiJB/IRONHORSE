@@ -1,0 +1,10 @@
+[Unit]
+Description=Run dcentral-fieldops database backup nightly
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
