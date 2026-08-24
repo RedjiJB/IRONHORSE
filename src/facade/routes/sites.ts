@@ -21,7 +21,7 @@
 import type { Router } from "../router.js";
 import { readJsonBody, sendError, sendJson } from "../context.js";
 import { requireAdminRole, requireStaffRole } from "../auth.js";
-import { listSitesWithActivityCounts, registerSite, type SiteType } from "../../domain/sites.js";
+import { getSiteCostSummary, listSitesWithActivityCounts, registerSite, setSiteBudget, type SiteType } from "../../domain/sites.js";
 import { geocodeAddressViaNominatim } from "../../domain/telemetry.js";
 
 const SITE_TYPES: SiteType[] = ["job_site", "depot", "vendor", "shop"];
@@ -105,6 +105,45 @@ export function registerSiteRoutes(router: Router): void {
         crew_today_count: 0,
         open_alerts_count: 0,
       });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  // Site Cost Summary -- the real replacement for the "5D Cost" chip
+  // (see src/domain/sites.ts's getSiteCostSummary for why "5D" itself is
+  // never used as a label: that specifically means cost-loaded-schedule/
+  // BIM integration, which nothing here backs).
+  router.get("/api/v1/sites/:id/cost-summary", async (req, res, { id }) => {
+    try {
+      await requireStaffRole(req);
+      const summary = await getSiteCostSummary(id);
+      if (!summary) {
+        sendJson(res, 404, { detail: "Site not found" });
+        return;
+      }
+      sendJson(res, 200, summary);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  // Admin-only, same gating as site creation -- no dedicated admin UI for
+  // this yet beyond a direct value, matching the original scope decision.
+  router.patch("/api/v1/sites/:id/budget", async (req, res, { id }) => {
+    try {
+      await requireAdminRole(req);
+      const body = await readJsonBody<{ budget?: number | null }>(req);
+      if (body.budget !== null && typeof body.budget !== "number") {
+        sendJson(res, 422, { detail: "budget must be a number or null" });
+        return;
+      }
+      const site = await setSiteBudget(id, body.budget ?? null);
+      if (!site) {
+        sendJson(res, 404, { detail: "Site not found" });
+        return;
+      }
+      sendJson(res, 200, { id: site.id, budget: site.budget });
     } catch (err) {
       sendError(res, err);
     }

@@ -11,6 +11,7 @@ import { registerSite } from "../src/domain/sites.js";
 import { registerCrewMember } from "../src/domain/crewMembers.js";
 import { createTimeclockEntry } from "../src/domain/timeclock.js";
 import { raiseAlert } from "../src/domain/alerts.js";
+import { setCrewPayProfile } from "../src/domain/payroll.js";
 import { buildFacadeServer } from "../src/facade/server.js";
 
 let server: Server;
@@ -24,6 +25,8 @@ const createdCrewIds: string[] = [];
 const createdCrewDids: string[] = [];
 const createdTimeclockEntryIds: string[] = [];
 const createdAlertIds: string[] = [];
+const createdOrderIds: string[] = [];
+const createdPurchaseOrderIds: string[] = [];
 
 beforeAll(async () => {
   server = buildFacadeServer();
@@ -57,7 +60,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await pool.query("DELETE FROM purchase_orders WHERE id = ANY($1)", [createdPurchaseOrderIds]);
+  await pool.query("DELETE FROM orders WHERE id = ANY($1)", [createdOrderIds]);
   await pool.query("DELETE FROM timeclock_entries WHERE id = ANY($1)", [createdTimeclockEntryIds]);
+  await pool.query("DELETE FROM crew_pay_profiles WHERE crew_member_id = ANY($1)", [createdCrewIds]);
   await pool.query("DELETE FROM notifications WHERE source_id = ANY($1)", [createdAlertIds]);
   await pool.query("DELETE FROM alerts WHERE id = ANY($1)", [createdAlertIds]);
   await pool.query("DELETE FROM capability_grants WHERE subject_did = ANY($1)", [createdCrewDids]);
@@ -195,5 +201,84 @@ describe("POST /api/v1/sites", () => {
       body: JSON.stringify({ name: "QA Facade Bad Type", type: "not_a_real_type", lat: 45.4, lng: -75.7 }),
     });
     expect(badType.status).toBe(422);
+  });
+});
+
+describe("PATCH /api/v1/sites/:id/budget + GET /api/v1/sites/:id/cost-summary", () => {
+  it("sets a budget (admin-gated), and blends real PO spend + real labour spend against it", async () => {
+    const site = await registerSite({ name: "QA Facade Cost Summary Site", type: "job_site" });
+    createdSiteIds.push(site.id);
+    // getSiteCostSummary windows from site.created_at (a real site's
+    // creation always precedes any real activity at it) -- backdate it
+    // here so this fixture's synthetic 2-hours-ago clock-in fits inside
+    // that window, same as a real site would.
+    await pool.query("UPDATE sites SET created_at = now() - interval '3 hours' WHERE id = $1", [site.id]);
+
+    // Real labour spend -- a crew member with a real hourly rate, clocked
+    // in and out at this site. Also stands in as the order's requester
+    // for the PO-spend fixture below (orders.requester_id is NOT NULL).
+    const crew = await registerCrewMember({ name: "QA Facade Cost Summary Crew", phone: "+15559991903" });
+    createdCrewIds.push(crew.id);
+    createdCrewDids.push(crew.did);
+    await setCrewPayProfile(crew.id, { payType: "payroll", hourlyRate: 30 });
+
+    // Real PO spend -- a purchase order whose order resolves to this site.
+    const orderRow = await pool.query(
+      `INSERT INTO orders (requester_id, site_id) VALUES ($1, $2) RETURNING id`,
+      [crew.id, site.id],
+    );
+    const orderId = orderRow.rows[0].id as string;
+    createdOrderIds.push(orderId);
+    const poRow = await pool.query(
+      `INSERT INTO purchase_orders (order_id, cost) VALUES ($1, $2) RETURNING id`,
+      [orderId, 250],
+    );
+    createdPurchaseOrderIds.push(poRow.rows[0].id as string);
+    // getSiteCostSummary's own `to` bound is real "now" at call time, so
+    // both events must land at or before that -- 'in' two hours in the
+    // past, 'out' just now, not the other way around.
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    const inEntry = await pool.query(
+      `INSERT INTO timeclock_entries (crew_member_id, event_type, site_id, geofence_verified, "timestamp") VALUES ($1, 'in', $2, false, $3) RETURNING id`,
+      [crew.id, site.id, twoHoursAgo],
+    );
+    createdTimeclockEntryIds.push(inEntry.rows[0].id as string);
+    const outEntry = await createTimeclockEntry({ crewMemberId: crew.id, eventType: "out", siteId: site.id, geofenceVerified: false });
+    createdTimeclockEntryIds.push(outEntry.id);
+
+    // No budget set yet -- variance must be null, not 0.
+    const beforeBudget = await authed(`/api/v1/sites/${site.id}/cost-summary`);
+    expect(beforeBudget.status).toBe(200);
+    const beforeBody = await beforeBudget.json();
+    expect(beforeBody.budget).toBeNull();
+    expect(beforeBody.variance).toBeNull();
+    expect(beforeBody.po_spend).toBe(250);
+    expect(beforeBody.labour_spend).toBeCloseTo(60, 1); // 2h * $30/h
+
+    // Staff cannot set the budget.
+    const staffAttempt = await authed(`/api/v1/sites/${site.id}/budget`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ budget: 1000 }),
+    });
+    expect(staffAttempt.status).toBe(403);
+
+    const setBudget = await asAdmin(`/api/v1/sites/${site.id}/budget`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ budget: 1000 }),
+    });
+    expect(setBudget.status).toBe(200);
+
+    const afterBudget = await authed(`/api/v1/sites/${site.id}/cost-summary`);
+    const afterBody = await afterBudget.json();
+    expect(afterBody.budget).toBe(1000);
+    expect(afterBody.total_spend).toBeCloseTo(310, 1); // 250 + 60
+    expect(afterBody.variance).toBeCloseTo(690, 1); // 1000 - 310
+  });
+
+  it("404s cost-summary for a site that doesn't exist", async () => {
+    const res = await authed(`/api/v1/sites/00000000-0000-0000-0000-000000000099/cost-summary`);
+    expect(res.status).toBe(404);
   });
 });
