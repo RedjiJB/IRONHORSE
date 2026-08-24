@@ -8,8 +8,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { pool } from "../../db/pool.js";
 import { CapabilityDeniedError, requireCapability } from "../middleware.js";
-
-const credentialArg = { credentialJwt: z.string().describe("The caller's presented CapabilityGrant VC (JWT)") };
+import { credentialArg } from "./shared.js";
 
 export function registerIdentityTools(server: McpServer): void {
   server.registerTool(
