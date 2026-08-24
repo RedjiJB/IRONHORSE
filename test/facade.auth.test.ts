@@ -25,6 +25,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await pool.query("DELETE FROM login_attempts WHERE email LIKE 'qa-facade-%@example.test'");
   await pool.query("DELETE FROM sessions WHERE user_id = ANY($1)", [createdUserIds]);
   await pool.query("DELETE FROM capability_grants WHERE subject_did = ANY($1)", [createdUserDids]);
   await pool.query("DELETE FROM verifiable_credentials WHERE subject_did = ANY($1)", [createdUserDids]);
@@ -81,6 +82,53 @@ describe("POST /api/v1/users/auth/login/", () => {
       body: JSON.stringify({ email: "qa-facade-wrongpass@example.test", password: "correct-password-123" }),
     });
     expect(deactivated.status).toBe(401);
+  });
+});
+
+describe("login lockout after repeated failures", () => {
+  it("locks out after 5 failed attempts within the window, rejecting even the correct password, and doesn't affect a different email", async () => {
+    await registerTestUser("qa-facade-lockout@example.test");
+    await registerTestUser("qa-facade-lockout-other@example.test");
+
+    for (let i = 0; i < 5; i++) {
+      const res = await fetch(`${baseUrl}/api/v1/users/auth/login/`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "qa-facade-lockout@example.test", password: "wrong-password" }),
+      });
+      expect(res.status).toBe(401);
+    }
+
+    // The 6th attempt, now with the CORRECT password, is still rejected --
+    // locked out before the password is even checked.
+    const lockedOut = await fetch(`${baseUrl}/api/v1/users/auth/login/`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "qa-facade-lockout@example.test", password: "correct-password-123" }),
+    });
+    expect(lockedOut.status).toBe(401);
+
+    // A different email, never attempted, is completely unaffected.
+    const otherEmail = await fetch(`${baseUrl}/api/v1/users/auth/login/`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "qa-facade-lockout-other@example.test", password: "correct-password-123" }),
+    });
+    expect(otherEmail.status).toBe(200);
+  });
+
+  it("locks out an email with no real account too, so lockout itself never reveals whether the account exists", async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await fetch(`${baseUrl}/api/v1/users/auth/login/`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "qa-facade-lockout-nobody@example.test", password: "whatever" }),
+      });
+      expect(res.status).toBe(401);
+    }
+
+    const { isLoginLocked } = await import("../src/domain/loginAttempts.js");
+    expect(await isLoginLocked("qa-facade-lockout-nobody@example.test")).toBe(true);
   });
 });
 

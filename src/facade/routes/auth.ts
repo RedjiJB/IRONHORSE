@@ -9,6 +9,7 @@ import { getUser, getUserByEmail } from "../../domain/users.js";
 import { verifyPassword } from "../../identity/passwords.js";
 import { createSession, deleteSession, resolveSession } from "../../domain/sessions.js";
 import { issueAccessTokenJwt } from "../../identity/accessToken.js";
+import { isLoginLocked, recordLoginAttempt } from "../../domain/loginAttempts.js";
 
 const REFRESH_TOKEN_DAYS = 30;
 
@@ -25,9 +26,17 @@ export function registerAuthRoutes(router: Router): void {
       }
 
       // Same generic 401 whether the email doesn't exist, the account is
-      // deactivated, or the password is wrong -- no user-enumeration.
+      // deactivated, the password is wrong, or the account is locked out
+      // from too many recent failures -- no user-enumeration, and locking
+      // out doesn't distinguish a real account from a made-up one either.
+      if (await isLoginLocked(body.email)) {
+        sendJson(res, 401, { detail: "Incorrect email or password" });
+        return;
+      }
+
       const user = await getUserByEmail(body.email);
       const passwordOk = user ? await verifyPassword(body.password, user.password_hash) : false;
+      await recordLoginAttempt(body.email, passwordOk && !!user?.active);
       if (!user || !user.active || !passwordOk) {
         sendJson(res, 401, { detail: "Incorrect email or password" });
         return;
