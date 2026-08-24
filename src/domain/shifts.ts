@@ -1,4 +1,5 @@
 import { pool } from "../db/pool.js";
+import { registerConfirmationExecutor } from "./confirmations.js";
 
 export type ShiftStatus = "assigned" | "confirmed" | "declined" | "no_show";
 
@@ -68,4 +69,26 @@ export async function listShifts(filter?: { crewMemberId?: string; siteId?: stri
 export async function getShift(id: string): Promise<Shift | null> {
   const result = await pool.query("SELECT * FROM shifts WHERE id = $1", [id]);
   return (result.rows[0] as Shift) ?? null;
+}
+
+// A crew member requesting to work later than their shift's originally
+// assigned end_time -- part of v1's confirm-before-execute action set
+// ("shift extensions") that had no equivalent tool here yet. Unlike
+// confirmShift (accepting/declining a shift already set by someone with
+// scheduling authority), this changes the shift's actual bounds, so it
+// goes through the same submit/review gate as timeclock events and
+// consumable adjustments rather than executing directly.
+export async function extendShift(shiftId: string, newEndTime: string): Promise<Shift | null> {
+  const result = await pool.query(`UPDATE shifts SET end_time = $2 WHERE id = $1 RETURNING *`, [shiftId, newEndTime]);
+  return (result.rows[0] as Shift) ?? null;
+}
+
+export function registerShiftExtensionExecutor(): void {
+  registerConfirmationExecutor("shift_extension", async (payload) => {
+    const shiftId = payload.shiftId as string;
+    const newEndTime = payload.newEndTime as string;
+    const shift = await extendShift(shiftId, newEndTime);
+    if (!shift) throw new Error("shift_extension failed: shift not found");
+    return { resultId: shift.id };
+  });
 }

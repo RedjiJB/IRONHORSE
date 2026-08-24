@@ -1,12 +1,14 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
-import { assignShift, confirmShift, listShifts } from "../../domain/shifts.js";
+import { assignShift, confirmShift, listShifts, registerShiftExtensionExecutor } from "../../domain/shifts.js";
+import { submitForConfirmation } from "../../domain/confirmations.js";
 import { requireCapability } from "../middleware.js";
 import { credentialArg, deniedResult } from "./shared.js";
 
 const shiftStatusSchema = z.enum(["assigned", "confirmed", "declined", "no_show"]);
 
 export function registerShiftTools(server: McpServer): void {
+  registerShiftExtensionExecutor();
   server.registerTool(
     "assign_shift",
     {
@@ -52,6 +54,37 @@ export function registerShiftTools(server: McpServer): void {
         const shift = await confirmShift(shiftId, decision);
         if (!shift) return { content: [{ type: "text", text: "Not found" }], isError: true };
         return { content: [{ type: "text", text: JSON.stringify(shift) }] };
+      } catch (err) {
+        return deniedResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "submit_shift_extension",
+    {
+      title: "Submit Shift Extension",
+      description:
+        "Submits a request to extend a shift's end time for management review -- a crew member's own request to work longer isn't scheduling authority. Does not execute directly: creates a pending_confirmations row. Minimum tier: 2.",
+      inputSchema: z.object({
+        ...credentialArg,
+        shiftId: z.string().uuid(),
+        crewMemberId: z.string().uuid(),
+        newEndTime: z.string().describe("HH:MM"),
+        reason: z.string().optional(),
+      }),
+    },
+    async ({ credentialJwt, shiftId, crewMemberId, newEndTime, reason }) => {
+      try {
+        await requireCapability(credentialJwt, "mcp:tool:submit_shift_extension", 2);
+        const pending = await submitForConfirmation({
+          actionType: "shift_extension",
+          capability: "mcp:tool:submit_shift_extension",
+          summary: `Extend shift ${shiftId} to ${newEndTime} for crew member ${crewMemberId}${reason ? ` (${reason})` : ""}`,
+          payload: { shiftId, newEndTime },
+          submittedByCrewMemberId: crewMemberId,
+        });
+        return { content: [{ type: "text", text: JSON.stringify({ status: "awaiting_review", pendingConfirmationId: pending.id }) }] };
       } catch (err) {
         return deniedResult(err);
       }
