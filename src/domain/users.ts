@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { didWebForDomain } from "../identity/did.js";
 import { generateAndStoreKeyPair } from "../identity/keys.js";
-import { hashPassword } from "../identity/passwords.js";
+import { hashPassword, verifyPassword } from "../identity/passwords.js";
 import { getOrCreateSelfNode } from "../identity/node.js";
 import { issueCapabilityGrant, checkStandingCapability } from "../identity/capabilities.js";
 
@@ -117,6 +117,25 @@ export async function resetUserPassword(id: string, newPassword: string): Promis
   const passwordHash = await hashPassword(newPassword);
   const result = await pool.query("UPDATE users SET password_hash = $2 WHERE id = $1 RETURNING *", [id, passwordHash]);
   return result.rows[0] ? toPublicUser(result.rows[0] as User) : null;
+}
+
+// Restoring Settings, Slice Q: real self-service password change --
+// unlike resetUserPassword (admin-only, no current-password check),
+// this is the user changing their own, so it re-verifies the current
+// password first via the same hash-check the login route already uses.
+export type ChangeOwnPasswordResult = { ok: true } | { ok: false; reason: "not_found" | "wrong_password" };
+
+export async function changeOwnPassword(id: string, currentPassword: string, newPassword: string): Promise<ChangeOwnPasswordResult> {
+  const result = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
+  const user = result.rows[0] as User | undefined;
+  if (!user) return { ok: false, reason: "not_found" };
+
+  const valid = await verifyPassword(currentPassword, user.password_hash);
+  if (!valid) return { ok: false, reason: "wrong_password" };
+
+  const passwordHash = await hashPassword(newPassword);
+  await pool.query("UPDATE users SET password_hash = $2 WHERE id = $1", [id, passwordHash]);
+  return { ok: true };
 }
 
 export async function hasAdminCapability(userDid: string): Promise<boolean> {

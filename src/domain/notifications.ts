@@ -6,6 +6,7 @@
 // queries and the state transitions, not the poller process.
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
+import { dispatchToWebhooks } from "./webhookTargets.js";
 
 export type NotificationPriority = "critical" | "routine";
 
@@ -39,7 +40,23 @@ export async function createNotificationForAlert(
      VALUES ($1, $2, 'alert', $3, $4) RETURNING *`,
     [args.severity, args.summary, args.alertId, args.recipientRolesOverride ?? null],
   );
-  return result.rows[0] as Notification;
+  const notification = result.rows[0] as Notification;
+
+  // Fire-and-forget, outside the transaction -- a slow/dead webhook
+  // endpoint must never delay or fail the alert-creation commit. Errors
+  // are swallowed here (dispatchToWebhooks already records failures on
+  // the target row itself); a caller awaiting raiseAlert never blocks on
+  // webhook delivery.
+  void dispatchToWebhooks("notification.created", {
+    id: notification.id,
+    priority: notification.priority,
+    message: notification.message,
+    source_type: notification.source_type,
+    source_id: notification.source_id,
+    created_at: notification.created_at,
+  }).catch(() => {});
+
+  return notification;
 }
 
 // What the delivery poller pulls each cycle: critical, never delivered,

@@ -21,6 +21,14 @@ import { registerTeamRoutes } from "./routes/teams.js";
 import { registerFieldTimeRoutes } from "./routes/fieldTime.js";
 import { registerLocationRoutes } from "./routes/locations.js";
 import { registerChatRoutes } from "./routes/chat.js";
+import { registerSiteRoutes } from "./routes/sites.js";
+import { registerSystemRoutes } from "./routes/system.js";
+import { registerActivityRoutes } from "./routes/activity.js";
+import { registerInboxRoutes } from "./routes/inbox.js";
+import { registerWebhookTargetRoutes } from "./routes/webhookTargets.js";
+import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerKpiRoutes } from "./routes/kpis.js";
+import { registerFieldReportRoutes } from "./routes/fieldReports.js";
 
 export function buildFacadeServer(): Server {
   const router = new Router();
@@ -35,6 +43,14 @@ export function buildFacadeServer(): Server {
   registerFieldTimeRoutes(router);
   registerLocationRoutes(router);
   registerChatRoutes(router);
+  registerSiteRoutes(router);
+  registerSystemRoutes(router);
+  registerActivityRoutes(router);
+  registerInboxRoutes(router);
+  registerWebhookTargetRoutes(router);
+  registerSettingsRoutes(router);
+  registerKpiRoutes(router);
+  registerFieldReportRoutes(router);
 
   return createServer((req, res) => {
     router.dispatch(req, res).then((handled) => {

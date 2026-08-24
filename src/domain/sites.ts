@@ -48,3 +48,32 @@ export async function getSite(id: string): Promise<Site | null> {
   const result = await pool.query("SELECT * FROM sites WHERE id = $1", [id]);
   return (result.rows[0] as Site) ?? null;
 }
+
+export type SiteWithActivityCounts = Site & { crew_today_count: number; open_alerts_count: number };
+
+// Dashboard restoration, Slice M: for the site cards widget -- one query,
+// LATERAL joins, same pattern as listVehicles()'s latest-telemetry join,
+// avoiding N+1 for a dashboard data source. crew_today_count is distinct
+// crew who clocked in at this site today (calendar day, not "currently
+// still clocked in" -- that would need per-crew latest-event resolution,
+// a heavier query for a summary tile that doesn't need that precision).
+export async function listSitesWithActivityCounts(): Promise<SiteWithActivityCounts[]> {
+  const result = await pool.query(
+    `SELECT s.*,
+       COALESCE(c.crew_today_count, 0) AS crew_today_count,
+       COALESCE(a.open_alerts_count, 0) AS open_alerts_count
+     FROM sites s
+     LEFT JOIN LATERAL (
+       SELECT COUNT(DISTINCT crew_member_id)::int AS crew_today_count
+       FROM timeclock_entries te
+       WHERE te.site_id = s.id AND te.event_type = 'in' AND te."timestamp" >= date_trunc('day', now())
+     ) c ON true
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS open_alerts_count
+       FROM alerts al
+       WHERE al.site_id = s.id AND al.resolved_at IS NULL
+     ) a ON true
+     ORDER BY s.name`,
+  );
+  return result.rows as SiteWithActivityCounts[];
+}

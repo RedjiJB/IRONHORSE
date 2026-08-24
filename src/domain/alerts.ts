@@ -141,3 +141,30 @@ export async function listAlerts(filter?: { type?: AlertType; resolved?: boolean
   const result = await pool.query(`SELECT * FROM alerts ${where} ORDER BY raised_at DESC`, params);
   return result.rows as Alert[];
 }
+
+export async function getAlert(id: string): Promise<Alert | null> {
+  const result = await pool.query("SELECT * FROM alerts WHERE id = $1", [id]);
+  return (result.rows[0] as Alert) ?? null;
+}
+
+// Dashboard restoration: for the inbox/activity feeds' click-through.
+// Only alert types whose related_record_id's table actually has a real
+// façade page get a link -- see 0025_alerts.sql's type->table mapping
+// for the full list. Several types point at tables with no page at all
+// in this façade (checkouts, jobs, assets, shifts), and the self-
+// monitoring types (backup_failed, it_issue, etc.) have no backing
+// record to link to regardless -- those stay unlinked rather than
+// guessing a destination.
+const ALERT_TYPE_ROUTE: Partial<Record<AlertType, string>> = {
+  idle: "/resources",
+  crew_location_stale: "/resources",
+  crew_off_site: "/resources",
+  wrong_site: "/equipment",
+  vehicle_dark: "/equipment",
+  order_stalled: "/procurement",
+  weather: "/map",
+};
+
+export function alertLinkForType(type: AlertType): string | null {
+  return ALERT_TYPE_ROUTE[type] ?? null;
+}

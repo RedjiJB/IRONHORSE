@@ -1,13 +1,17 @@
 // Chat façade route verification against a real running HTTP server --
-// no mocking, same convention as every other test in this project. Only
-// the "no provider configured" path is exercised here: no real
-// DeepSeek/Anthropic key exists in this test environment (matching
-// production today, see docs/ARCHITECTURE.md's chat status entry), so
-// this is the actual current behavior, not a simulated failure case.
+// no mocking, same convention as every other test in this project. The
+// "no provider configured" path is exercised by temporarily clearing
+// the real llm_settings singleton for the duration of that one test
+// (and restoring it immediately after) -- a real DeepSeek key is now
+// configured in this environment (see docs/ARCHITECTURE.md's chat
+// status entry), so this path can no longer be observed as-is without
+// deliberately clearing it, same capture-and-restore convention
+// test/facade.settings.test.ts already uses for this same singleton.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
 import { pool } from "../src/db/pool.js";
 import { registerUser } from "../src/domain/users.js";
+import { getLlmSettings, updateLlmSettings } from "../src/domain/llmSettings.js";
 import { buildFacadeServer } from "../src/facade/server.js";
 
 let server: Server;
@@ -71,17 +75,28 @@ describe("POST /api/v1/chat", () => {
   });
 
   it("returns a clear 503 rather than a raw 500 when no LLM provider is configured", async () => {
-    // This IS the current real state (no DEEPSEEK_API_KEY/ANTHROPIC_API_KEY
-    // anywhere in this environment) -- see docs/ARCHITECTURE.md's chat
-    // status entry. If a key is ever exported into this test's own
-    // process env, this assertion is the one that will need to change.
-    const res = await authed("/api/v1/chat", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "How many crew members are active?" }),
-    });
-    expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.detail).toMatch(/no llm provider configured/i);
+    // Real keys are configured in this environment today, so the "none
+    // configured" path is only observable by deliberately clearing the
+    // singleton for the duration of this one assertion, then restoring
+    // it -- env vars aren't set in this test process either way, so
+    // clearing the DB row alone reproduces the true unconfigured state.
+    const original = await getLlmSettings();
+    try {
+      await updateLlmSettings({ deepseekApiKey: "", openaiApiKey: "", anthropicApiKey: "" });
+      const res = await authed("/api/v1/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: "How many crew members are active?" }),
+      });
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.detail).toMatch(/no llm provider configured/i);
+    } finally {
+      await updateLlmSettings({
+        deepseekApiKey: original.deepseek_api_key,
+        openaiApiKey: original.openai_api_key,
+        anthropicApiKey: original.anthropic_api_key,
+      });
+    }
   });
 });

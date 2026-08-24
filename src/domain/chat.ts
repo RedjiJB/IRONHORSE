@@ -18,6 +18,7 @@ import { listVehicles } from "./vehicles.js";
 import { listAlerts } from "./alerts.js";
 import { getNotificationSettings } from "./notificationSettings.js";
 import { computeReconciliation } from "./payroll.js";
+import { getLlmSettings } from "./llmSettings.js";
 
 /* ── Tool registry ────────────────────────────────────────────────── */
 
@@ -101,7 +102,7 @@ function toolsToJsonSchema(tools: ToolDefinition[]) {
 /* ── DeepSeek (OpenAI-compatible chat-completions + tool-calling) ───── */
 
 export const callDeepSeek: LlmProvider = async (messages, tools) => {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = (await getLlmSettings()).deepseek_api_key || process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured");
 
   const body = {
@@ -145,10 +146,58 @@ export const callDeepSeek: LlmProvider = async (messages, tools) => {
   return { content: message?.content ?? null, toolCalls };
 };
 
+/* ── OpenAI (Chat Completions + tool-calling, same wire shape as
+   DeepSeek's OpenAI-compatible API) ──────────────────────────────── */
+
+export const callOpenAI: LlmProvider = async (messages, tools) => {
+  const apiKey = (await getLlmSettings()).openai_api_key || process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+
+  const body = {
+    model: "gpt-4o-mini",
+    messages: messages.map((m) => {
+      if (m.role === "assistant" && m.toolCalls?.length) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: "function",
+            function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+          })),
+        };
+      }
+      if (m.role === "tool") {
+        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+      }
+      return { role: m.role, content: m.content };
+    }),
+    tools: toolsToJsonSchema(tools).map((t) => ({ type: "function", function: t })),
+  };
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${await res.text().catch(() => "")}`);
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
+  };
+  const message = data.choices?.[0]?.message;
+  const toolCalls = (message?.tool_calls ?? []).map((tc) => ({
+    id: tc.id,
+    name: tc.function.name,
+    arguments: JSON.parse(tc.function.arguments || "{}") as Record<string, unknown>,
+  }));
+  return { content: message?.content ?? null, toolCalls };
+};
+
 /* ── Anthropic (Messages API + tool-use blocks) ──────────────────── */
 
 export const callAnthropic: LlmProvider = async (messages, tools) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = (await getLlmSettings()).anthropic_api_key || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
 
   const system = messages.find((m) => m.role === "system")?.content;
@@ -194,12 +243,13 @@ export const callAnthropic: LlmProvider = async (messages, tools) => {
   return { content: textBlock?.text ?? null, toolCalls };
 };
 
-// DeepSeek primary, Anthropic fallback -- matches v1's actually-configured
-// chain (the sovereignty policy names a fuller 5-provider list, but only
-// these two have real keys anywhere; Kimi/OpenAI/Gemini slot in here
-// later as one more entry each, no other code changes needed).
+// DeepSeek primary, OpenAI fallback, Anthropic last -- matches which
+// providers actually have configured keys today (the sovereignty policy
+// names a fuller 5-provider list; Kimi/Gemini slot in here later as one
+// more entry each, no other code changes needed).
 const PROVIDER_CHAIN: { name: string; call: LlmProvider }[] = [
   { name: "deepseek", call: callDeepSeek },
+  { name: "openai", call: callOpenAI },
   { name: "anthropic", call: callAnthropic },
 ];
 
