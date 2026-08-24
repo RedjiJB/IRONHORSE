@@ -73,6 +73,26 @@ functions:
     reviewed_by: "Redji (analysis by Claude Sonnet 5)"
     reviewed_at: "2026-08-21"
 
+  - id: geocoding_forward
+    description: >
+      Forward-geocoding a typed address into a lat/lng, for registering a
+      site or logging a crew/vehicle check-in by address instead of raw
+      coordinates.
+    status: external_accepted
+    rationale: >
+      Same host and decision as geocoding_reverse above, just the other
+      direction: a dispatcher typing an address they already know (a job
+      site's street address, where they can see a crew member standing)
+      rather than looking up its coordinates first. The address text sent
+      to Nominatim is not more sensitive than the coordinate that would
+      otherwise be typed directly and stored in this same system's
+      database regardless of which direction the lookup runs. Same free,
+      no-key, no-account properties as the reverse case; self-hosting is
+      the same disproportionate infra commitment for the same marginal
+      gain. Accepted on the same terms.
+    reviewed_by: "Redji (analysis by Claude Sonnet 5)"
+    reviewed_at: "2026-08-24"
+
   - id: weather_forecast
     description: Weather-triggered alerts (v1's alert_type 'weather').
     status: external_accepted

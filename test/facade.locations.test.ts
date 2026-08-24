@@ -155,4 +155,26 @@ describe("POST /api/v1/locations/checkin", () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it("accepts an address in place of lat/lng, forward-geocoding it before writing the point", async () => {
+    const crew = await registerCrewMember({ name: "QA Checkin By Address Crew", phone: "+15559991603" });
+    createdCrewIds.push(crew.id);
+    createdCrewDids.push(crew.did);
+
+    // No test hook for the real Nominatim call here either (matches the
+    // lat/lng checkin test above) -- one real network call, tolerant of
+    // either a resolved point (200) or an honest "couldn't resolve that"
+    // (422) if the network/service is unavailable in this environment.
+    const res = await authed("/api/v1/locations/checkin", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "crew", target_id: crew.id, address: "Parliament Hill, Ottawa, Ontario, Canada" }),
+    });
+    expect([200, 422]).toContain(res.status);
+    if (res.status === 200) {
+      const body = await res.json();
+      expect(Number.isFinite(body.lat)).toBe(true);
+      expect(Number.isFinite(body.lng)).toBe(true);
+    }
+  });
 });

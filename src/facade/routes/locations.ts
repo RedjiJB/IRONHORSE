@@ -21,7 +21,7 @@ import { readJsonBody, sendError, sendJson } from "../context.js";
 import { requireStaffRole } from "../auth.js";
 import { getVehicle, listVehicles } from "../../domain/vehicles.js";
 import { getCrewMember, listCrewWithLatestLocation } from "../../domain/crewMembers.js";
-import { logCrewTelemetry, logVehicleTelemetry } from "../../domain/telemetry.js";
+import { logCrewTelemetry, logVehicleTelemetry, geocodeAddressViaNominatim } from "../../domain/telemetry.js";
 
 type LocationPoint = {
   id: string;
@@ -39,6 +39,7 @@ type CheckinBody = {
   target_id?: string;
   lat?: number;
   lng?: number;
+  address?: string;
 };
 
 export function registerLocationRoutes(router: Router): void {
@@ -85,7 +86,11 @@ export function registerLocationRoutes(router: Router): void {
 
   // Manual check-in -- see file header. Real telemetry, not a fake
   // simulation: it writes to the same tables and goes through the same
-  // reverse-geocoding a WhatsApp location share would.
+  // reverse-geocoding a WhatsApp location share would. Accepts either a
+  // lat/lng pair directly or an address to forward-geocode first (same
+  // Nominatim decision the site-creation route uses) -- a dispatcher who
+  // knows a street address shouldn't have to look up its coordinates
+  // first just to log it.
   router.post("/api/v1/locations/checkin", async (req, res) => {
     try {
       await requireStaffRole(req);
@@ -94,9 +99,25 @@ export function registerLocationRoutes(router: Router): void {
         sendJson(res, 422, { detail: "type must be 'crew' or 'vehicle'" });
         return;
       }
-      if (!body.target_id || typeof body.lat !== "number" || typeof body.lng !== "number") {
-        sendJson(res, 422, { detail: "target_id, lat, and lng are required" });
+      if (!body.target_id) {
+        sendJson(res, 422, { detail: "target_id is required" });
         return;
+      }
+
+      let lat = body.lat;
+      let lng = body.lng;
+      if (typeof lat !== "number" || typeof lng !== "number") {
+        if (!body.address?.trim()) {
+          sendJson(res, 422, { detail: "Provide either lat/lng or an address" });
+          return;
+        }
+        const geocoded = await geocodeAddressViaNominatim(body.address);
+        if (!geocoded) {
+          sendJson(res, 422, { detail: "Could not resolve that address" });
+          return;
+        }
+        lat = geocoded.lat;
+        lng = geocoded.lng;
       }
 
       if (body.type === "vehicle") {
@@ -105,7 +126,7 @@ export function registerLocationRoutes(router: Router): void {
           sendJson(res, 404, { detail: "Not found" });
           return;
         }
-        const point = await logVehicleTelemetry({ vehicleId: body.target_id, lat: body.lat, lng: body.lng });
+        const point = await logVehicleTelemetry({ vehicleId: body.target_id, lat, lng });
         sendJson(res, 200, {
           id: point.id,
           type: "vehicle",
@@ -123,7 +144,7 @@ export function registerLocationRoutes(router: Router): void {
         sendJson(res, 404, { detail: "Not found" });
         return;
       }
-      const point = await logCrewTelemetry({ crewMemberId: body.target_id, lat: body.lat, lng: body.lng });
+      const point = await logCrewTelemetry({ crewMemberId: body.target_id, lat, lng });
       sendJson(res, 200, {
         id: point.id,
         type: "crew",

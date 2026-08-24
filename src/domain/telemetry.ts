@@ -37,6 +37,33 @@ export const reverseGeocodeViaNominatim: ReverseGeocode = async (lat, lng) => {
   }
 };
 
+// The forward direction of the same reviewed Nominatim decision above
+// (policy/sovereignty_tiers.yaml id geocoding_forward) -- a dispatcher
+// typing a real address in, rather than looking up its coordinates first.
+// Same host, same free/no-key/no-account properties, same 5s timeout and
+// fail-silently-on-error posture: a geocoding miss should surface as "we
+// couldn't find that address," never a crash.
+export type ForwardGeocode = (address: string) => Promise<{ lat: number; lng: number } | null>;
+
+export const geocodeAddressViaNominatim: ForwardGeocode = async (address) => {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(address)}&limit=1`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(5000),
+      headers: { "User-Agent": "dcentral-fieldops (Sod Boys Ltd internal field-ops tool)" },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { lat?: string; lon?: string }[];
+    const first = data[0];
+    if (!first?.lat || !first?.lon) return null;
+    const lat = Number(first.lat);
+    const lng = Number(first.lon);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  } catch {
+    return null;
+  }
+};
+
 export type TelemetrySource = "whatsapp_location" | "obd";
 
 // Matches v1's GEOCODE_REUSE_RADIUS_METERS -- a new point within 100m of

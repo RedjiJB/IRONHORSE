@@ -16,6 +16,7 @@ import { buildFacadeServer } from "../src/facade/server.js";
 let server: Server;
 let baseUrl: string;
 let accessToken: string;
+let adminAccessToken: string;
 const createdUserIds: string[] = [];
 const createdUserDids: string[] = [];
 const createdSiteIds: string[] = [];
@@ -41,6 +42,17 @@ beforeAll(async () => {
     body: JSON.stringify({ email: "qa-facade-sites@example.test", password: "correct-password-123" }),
   });
   ({ access_token: accessToken } = await login.json());
+
+  const admin = await registerUser({ email: "qa-facade-sites-admin@example.test", name: "QA Facade Sites Admin", password: "correct-password-123", role: "admin" });
+  createdUserIds.push(admin.id);
+  createdUserDids.push(admin.did);
+
+  const adminLogin = await fetch(`${baseUrl}/api/v1/users/auth/login/`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "qa-facade-sites-admin@example.test", password: "correct-password-123" }),
+  });
+  ({ access_token: adminAccessToken } = await adminLogin.json());
 });
 
 afterAll(async () => {
@@ -65,6 +77,13 @@ function authed(path: string, init?: RequestInit) {
   return fetch(`${baseUrl}${path}`, {
     ...init,
     headers: { ...init?.headers, authorization: `Bearer ${accessToken}` },
+  });
+}
+
+function asAdmin(path: string, init?: RequestInit) {
+  return fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: { ...init?.headers, authorization: `Bearer ${adminAccessToken}` },
   });
 }
 
@@ -119,5 +138,62 @@ describe("GET /api/v1/sites", () => {
   it("401s without a bearer token", async () => {
     const res = await fetch(`${baseUrl}/api/v1/sites`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /api/v1/sites", () => {
+  it("registers a site from lat/lng, admin-gated, and it appears in the list", async () => {
+    const res = await asAdmin("/api/v1/sites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "QA Facade Created Site", type: "job_site", lat: 45.4, lng: -75.7 }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    createdSiteIds.push(body.id);
+    expect(body.name).toBe("QA Facade Created Site");
+    expect(body.type).toBe("job_site");
+    expect(body.lat).toBe(45.4);
+    expect(body.lng).toBe(-75.7);
+    expect(body.crew_today_count).toBe(0);
+    expect(body.open_alerts_count).toBe(0);
+
+    const list = await authed("/api/v1/sites");
+    const listBody = await list.json();
+    expect(listBody.items.some((s: { id: string }) => s.id === body.id)).toBe(true);
+  });
+
+  it("403s for a staff (non-admin) requester", async () => {
+    const res = await authed("/api/v1/sites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "QA Facade Should Not Create", type: "job_site", lat: 45.4, lng: -75.7 }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("422s when neither lat/lng nor an address is provided", async () => {
+    const res = await asAdmin("/api/v1/sites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "QA Facade Missing Location", type: "job_site" }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it("422s for a missing name or an invalid type", async () => {
+    const noName = await asAdmin("/api/v1/sites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "job_site", lat: 45.4, lng: -75.7 }),
+    });
+    expect(noName.status).toBe(422);
+
+    const badType = await asAdmin("/api/v1/sites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "QA Facade Bad Type", type: "not_a_real_type", lat: 45.4, lng: -75.7 }),
+    });
+    expect(badType.status).toBe(422);
   });
 });

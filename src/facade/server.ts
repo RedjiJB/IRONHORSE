@@ -29,6 +29,7 @@ import { registerWebhookTargetRoutes } from "./routes/webhookTargets.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerKpiRoutes } from "./routes/kpis.js";
 import { registerFieldReportRoutes } from "./routes/fieldReports.js";
+import { registerVendorRoutes } from "./routes/vendors.js";
 
 export function buildFacadeServer(): Server {
   const router = new Router();
@@ -51,6 +52,7 @@ export function buildFacadeServer(): Server {
   registerSettingsRoutes(router);
   registerKpiRoutes(router);
   registerFieldReportRoutes(router);
+  registerVendorRoutes(router);
 
   return createServer((req, res) => {
     router.dispatch(req, res).then((handled) => {
