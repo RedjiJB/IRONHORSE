@@ -94,7 +94,7 @@ async function agentGrant(role: string, capability: string, tier: 0 | 1 | 2 | 3 
 
 describe("log_timeclock_event -> approve_pending_confirmation, over real MCP calls", () => {
   it("a tier-2 agent can submit but is denied approving its own submission (tier 3 required)", async () => {
-    const dispatchJwt = await agentGrant("mcp-dispatch-agent", "mcp:tool:log_timeclock_event", 2);
+    const dispatchJwt = await agentGrant("timeclock-dispatch-agent", "mcp:tool:log_timeclock_event", 2);
 
     const submitResult = await client.callTool({
       name: "log_timeclock_event",
@@ -118,8 +118,8 @@ describe("log_timeclock_event -> approve_pending_confirmation, over real MCP cal
   });
 
   it("a tier-3 agent can approve, and the resulting timeclock_entries row is real", async () => {
-    const dispatchJwt = await agentGrant("mcp-dispatch-agent", "mcp:tool:log_timeclock_event", 2);
-    const adminJwt = await agentGrant("mcp-admin-agent", "mcp:tool:approve_pending_confirmation", 3);
+    const dispatchJwt = await agentGrant("timeclock-dispatch-agent", "mcp:tool:log_timeclock_event", 2);
+    const adminJwt = await agentGrant("timeclock-admin-agent", "mcp:tool:approve_pending_confirmation", 3);
 
     const submitResult = await client.callTool({
       name: "log_timeclock_event",
@@ -144,8 +144,8 @@ describe("log_timeclock_event -> approve_pending_confirmation, over real MCP cal
   });
 
   it("a tier-3 agent's approval is still denied at the domain layer if reviewerCrewMemberId isn't management/owner", async () => {
-    const dispatchJwt = await agentGrant("mcp-dispatch-agent", "mcp:tool:log_timeclock_event", 2);
-    const adminJwt = await agentGrant("mcp-admin-agent", "mcp:tool:approve_pending_confirmation", 3);
+    const dispatchJwt = await agentGrant("timeclock-dispatch-agent", "mcp:tool:log_timeclock_event", 2);
+    const adminJwt = await agentGrant("timeclock-admin-agent", "mcp:tool:approve_pending_confirmation", 3);
 
     const submitResult = await client.callTool({
       name: "log_timeclock_event",

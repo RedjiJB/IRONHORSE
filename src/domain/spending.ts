@@ -7,6 +7,7 @@
 // inserts directly into this table, bypassing registerSpendRecord
 // entirely.
 import { pool } from "../db/pool.js";
+import { registerConfirmationExecutor } from "./confirmations.js";
 
 export type SpendCategory = "material" | "fuel" | "mileage" | "receipt" | "other";
 export type SpendMethod = "cash" | "company_card" | "personal_reimbursed";
@@ -130,6 +131,31 @@ export async function rejectSpendRecord(id: string, reviewer: { crewMemberId?: s
     [id, reviewer.crewMemberId ?? null, reviewer.userId ?? null, note ?? null],
   );
   return { ok: true, record: result.rows[0] as SpendRecord };
+}
+
+// Crew-submittable counterpart to registerSpendRecord (tier 4, a manager
+// keying in a spend on someone's behalf) -- a crew member's own report of
+// a purchase (e.g. a receipt photo for a company-card gas fill-up) isn't
+// trusted alone any more than a timeclock event or a consumable
+// adjustment is, so it goes through the same pending_confirmations gate
+// rather than writing directly. mileage stays out of this path entirely
+// -- that's submit_mileage_claim/mileageClaims.ts's own dedicated flow,
+// not this one. registerSpendRecord's own category/method validation
+// (mileage_forbids_amount etc.) still applies at approval time, same as
+// every other confirm-before-execute action here.
+export function registerSpendRecordExecutor(): void {
+  registerConfirmationExecutor("spend_record", async (payload) => {
+    const result = await registerSpendRecord({
+      category: payload.category as SpendCategory,
+      method: payload.method as SpendMethod,
+      amount: payload.amount as number | undefined,
+      description: payload.description as string | undefined,
+      documentId: payload.documentId as string | undefined,
+      crewMemberId: payload.crewMemberId as string,
+    });
+    if (!result.ok) throw new Error(`spend_record failed: ${result.reason}`);
+    return { resultId: result.record.id };
+  });
 }
 
 export type DisputeSpendRecordResult = { ok: true; record: SpendRecord } | { ok: false; reason: "not_found" | "not_rejected" | "already_disputed" };

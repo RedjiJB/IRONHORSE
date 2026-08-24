@@ -6,6 +6,7 @@ import {
   listMissingReceipts,
   listSpendRecords,
   registerSpendRecord,
+  registerSpendRecordExecutor,
   rejectSpendRecord,
 } from "../../domain/spending.js";
 import { submitForConfirmation } from "../../domain/confirmations.js";
@@ -14,10 +15,12 @@ import { requireCapability } from "../middleware.js";
 import { credentialArg, deniedResult } from "./shared.js";
 
 const categorySchema = z.enum(["material", "fuel", "mileage", "receipt", "other"]);
+const nonMileageCategorySchema = z.enum(["material", "fuel", "receipt", "other"]);
 const methodSchema = z.enum(["cash", "company_card", "personal_reimbursed"]);
 
 export function registerSpendingTools(server: McpServer): void {
   registerMileageClaimExecutor();
+  registerSpendRecordExecutor();
 
   server.registerTool(
     "register_spend_record",
@@ -66,6 +69,39 @@ export function registerSpendingTools(server: McpServer): void {
           capability: "mcp:tool:submit_mileage_claim",
           summary: `Mileage claim for ${distanceKm}km by crew member ${crewMemberId}`,
           payload: { crewMemberId, distanceKm, description: description ?? null },
+          submittedByCrewMemberId: crewMemberId,
+        });
+        return { content: [{ type: "text", text: JSON.stringify({ status: "awaiting_review", pendingConfirmationId: pending.id }) }] };
+      } catch (err) {
+        return deniedResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "submit_spend_record",
+    {
+      title: "Submit Spend Record",
+      description:
+        "Submits a crew member's own purchase (e.g. a company-card gas fill-up, with the receipt photo already uploaded via upload_document) for management review -- a crew member's own report of a purchase isn't trusted alone, same reasoning as timeclock/consumable submissions. Does not execute directly: creates a pending_confirmations row. For mileage, use submit_mileage_claim instead -- this tool excludes that category entirely. Minimum tier: 2.",
+      inputSchema: z.object({
+        ...credentialArg,
+        crewMemberId: z.string().uuid(),
+        category: nonMileageCategorySchema,
+        method: methodSchema,
+        amount: z.number().positive(),
+        description: z.string().optional(),
+        documentId: z.string().uuid().optional().describe("id of a receipt/photo already uploaded via upload_document"),
+      }),
+    },
+    async ({ credentialJwt, crewMemberId, category, method, amount, description, documentId }) => {
+      try {
+        await requireCapability(credentialJwt, "mcp:tool:submit_spend_record", 2);
+        const pending = await submitForConfirmation({
+          actionType: "spend_record",
+          capability: "mcp:tool:submit_spend_record",
+          summary: `${category} spend of $${amount} (${method}) by crew member ${crewMemberId}${description ? ` -- ${description}` : ""}`,
+          payload: { category, method, amount, description: description ?? null, documentId: documentId ?? null, crewMemberId },
           submittedByCrewMemberId: crewMemberId,
         });
         return { content: [{ type: "text", text: JSON.stringify({ status: "awaiting_review", pendingConfirmationId: pending.id }) }] };
