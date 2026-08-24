@@ -22,3 +22,8 @@ test/logs/
 
 # Uploaded documents (local filesystem storage, see src/domain/documents.ts)
 uploads/
+
+# Runtime artifacts from ops/retry-openclaw-provision.ps1
+ops/openclaw-provision.log
+ops/openclaw-provision.done
+ops/shape-config.json
