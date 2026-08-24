@@ -6,6 +6,13 @@ import { mcpServer } from "../server.js";
 import { buildDidDocument, didWebForAgent, didWebForDomain } from "../../identity/did.js";
 import { loadPublicJwk } from "../../identity/keys.js";
 import { startExceptionsWorker } from "../../domain/exceptions.js";
+import { withRequestContext } from "../requestContext.js";
+
+// Static per-server credential header, for MCP clients (e.g. OpenClaw's
+// native `mcp add --header`) that can attach one fixed value to every
+// request but can't inject a per-tool-call argument -- see
+// src/mcp/middleware.ts's fallback in requireCapability().
+const CREDENTIAL_HEADER = "x-capability-grant";
 
 const port = Number(process.env.MCP_HTTP_PORT ?? 8090);
 const domain = process.env.NODE_DID_DOMAIN;
@@ -53,9 +60,13 @@ const server = createServer((req, res) => {
     return;
   }
 
-  nodeHandler(req, res).catch((err) => {
-    console.error("[mcp-http] unhandled adapter error", err);
-    if (!res.destroyed) res.end();
+  const headerValue = req.headers[CREDENTIAL_HEADER];
+  const headerCredentialJwt = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  withRequestContext({ headerCredentialJwt }, () => {
+    nodeHandler(req, res).catch((err) => {
+      console.error("[mcp-http] unhandled adapter error", err);
+      if (!res.destroyed) res.end();
+    });
   });
 });
 

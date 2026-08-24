@@ -14,6 +14,8 @@ import { didWebForAgent } from "../src/identity/did.js";
 import { deleteKeyPair, generateAndStoreKeyPair } from "../src/identity/keys.js";
 import { issueCapabilityGrant } from "../src/identity/capabilities.js";
 import { mcpServer } from "../src/mcp/server.js";
+import { withRequestContext } from "../src/mcp/requestContext.js";
+import { requireCapability } from "../src/mcp/middleware.js";
 
 let issuerDid: string;
 let issuerNodeId: string;
@@ -118,5 +120,51 @@ describe("whoami / list_capabilities over MCP (InMemoryTransport)", () => {
     const capabilities = grants.map((g) => g.capability);
     expect(capabilities).toContain("mcp:tool:list_capabilities");
     expect(capabilities).toContain("mcp:tool:some-other-thing");
+  });
+});
+
+// The HTTP transport (src/mcp/transports/http.ts) calls nodeHandler(req,
+// res) synchronously inside withRequestContext(...) for every request, so
+// the whole request's tool-dispatch chain (including requireCapability())
+// runs inside that same AsyncLocalStorage frame -- exercised directly
+// here against requireCapability() itself, rather than through
+// InMemoryTransport (whose message dispatch is wired up once in
+// beforeAll via a persistent listener, outside any per-call context, so
+// it doesn't reflect a real per-request HTTP header the way http.ts does).
+describe("credentialJwt fallback via request-context header (OpenClaw-style shared credential)", () => {
+  it("falls back to the request-context header when credentialJwt is omitted", async () => {
+    const subjectDid = await newSubjectDid("mcp-subject-header-1");
+    const { jwt } = await issueCapabilityGrant({
+      issuerDid,
+      issuerNodeId,
+      subjectDid,
+      capability: "mcp:tool:whoami",
+      tier: 0,
+    });
+
+    const result = await withRequestContext({ headerCredentialJwt: jwt }, () =>
+      requireCapability(undefined, "mcp:tool:whoami", 0),
+    );
+    expect(result.subjectDid).toBe(subjectDid);
+  });
+
+  it("denies when credentialJwt is omitted and there is no request-context credential either", async () => {
+    await expect(requireCapability(undefined, "mcp:tool:whoami", 0)).rejects.toThrow("missing_credential");
+  });
+
+  it("prefers an explicitly-presented credentialJwt argument over the request-context header", async () => {
+    const subjectDid = await newSubjectDid("mcp-subject-header-2");
+    const { jwt: goodJwt } = await issueCapabilityGrant({
+      issuerDid,
+      issuerNodeId,
+      subjectDid,
+      capability: "mcp:tool:whoami",
+      tier: 0,
+    });
+
+    const result = await withRequestContext({ headerCredentialJwt: "garbage-not-a-real-jwt" }, () =>
+      requireCapability(goodJwt, "mcp:tool:whoami", 0),
+    );
+    expect(result.subjectDid).toBe(subjectDid);
   });
 });
