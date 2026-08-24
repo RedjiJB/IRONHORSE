@@ -13,14 +13,27 @@ import { registerCrewMember } from "../src/domain/crewMembers.js";
 import { setCrewPayProfile } from "../src/domain/payroll.js";
 import { raiseAlert, resolveAlert } from "../src/domain/alerts.js";
 import { registerVehicle } from "../src/domain/vehicles.js";
+import { createTimeclockEntry } from "../src/domain/timeclock.js";
+import { createFreeformPurchaseOrder } from "../src/domain/purchaseOrders.js";
+import { registerConsumable } from "../src/domain/consumables.js";
+import { registerSite } from "../src/domain/sites.js";
 import { TOOLS, runChatTurn, type LlmProvider, type ChatMessage } from "../src/domain/chat.js";
 
 const createdCrewIds: string[] = [];
 const createdCrewDids: string[] = [];
 const createdVehicleIds: string[] = [];
 const createdAlertIds: string[] = [];
+const createdTimeclockEntryIds: string[] = [];
+const createdPoIds: string[] = [];
+const createdConsumableIds: string[] = [];
+const createdSiteIds: string[] = [];
 
 afterAll(async () => {
+  await pool.query("DELETE FROM sites WHERE id = ANY($1)", [createdSiteIds]);
+  await pool.query("DELETE FROM consumables WHERE id = ANY($1)", [createdConsumableIds]);
+  await pool.query("DELETE FROM purchase_order_items WHERE purchase_order_id = ANY($1)", [createdPoIds]);
+  await pool.query("DELETE FROM purchase_orders WHERE id = ANY($1)", [createdPoIds]);
+  await pool.query("DELETE FROM timeclock_entries WHERE id = ANY($1)", [createdTimeclockEntryIds]);
   await pool.query("DELETE FROM alerts WHERE id = ANY($1)", [createdAlertIds]);
   await pool.query("DELETE FROM notifications WHERE source_id = ANY($1)", [createdAlertIds]);
   await pool.query("DELETE FROM vehicles WHERE id = ANY($1)", [createdVehicleIds]);
@@ -84,6 +97,79 @@ describe("tool registry", () => {
 
     const missing = (await findTool("get_crew_payroll_summary").handler({ crew_member_id: "00000000-0000-0000-0000-000000000000" })) as { error: string };
     expect(missing.error).toBeTruthy();
+  });
+
+  it("list_crew with status 'clocked_in' includes only a crew member with an open session today", async () => {
+    const clockedIn = await registerCrewMember({ name: "QA Chat Clocked In", phone: "+15559991705" });
+    createdCrewIds.push(clockedIn.id);
+    createdCrewDids.push(clockedIn.did);
+    const notClockedIn = await registerCrewMember({ name: "QA Chat Not Clocked In", phone: "+15559991706" });
+    createdCrewIds.push(notClockedIn.id);
+    createdCrewDids.push(notClockedIn.did);
+
+    const entry = await createTimeclockEntry({ crewMemberId: clockedIn.id, eventType: "in", geofenceVerified: false });
+    createdTimeclockEntryIds.push(entry.id);
+
+    const all = (await findTool("list_crew").handler({})) as { id: string }[];
+    expect(all.some((c) => c.id === clockedIn.id)).toBe(true);
+    expect(all.some((c) => c.id === notClockedIn.id)).toBe(true);
+
+    const clockedInOnly = (await findTool("list_crew").handler({ status: "clocked_in" })) as { id: string }[];
+    expect(clockedInOnly.some((c) => c.id === clockedIn.id)).toBe(true);
+    expect(clockedInOnly.some((c) => c.id === notClockedIn.id)).toBe(false);
+  });
+
+  it("get_kpis returns the same five KPI shapes as the BI dashboard", async () => {
+    const result = (await findTool("get_kpis").handler({})) as {
+      open_alerts: { critical: number; routine: number };
+      crew_utilization: { clocked_in_today: number; active_crew: number };
+      avg_alert_resolution: { resolved_count: number };
+      po_spend_this_month: unknown[];
+      timeclock_hours_this_week: { total_hours: number };
+    };
+    expect(result.open_alerts.critical).toBeGreaterThanOrEqual(0);
+    expect(result.crew_utilization.active_crew).toBeGreaterThanOrEqual(0);
+    expect(result.avg_alert_resolution.resolved_count).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(result.po_spend_this_month)).toBe(true);
+    expect(result.timeclock_hours_this_week.total_hours).toBeGreaterThanOrEqual(0);
+  });
+
+  it("list_purchase_orders finds a real freeform PO and filters correctly by status", async () => {
+    const po = await createFreeformPurchaseOrder({ cost: 42, items: [{ description: "QA chat tool PO item" }] });
+    createdPoIds.push(po.id);
+
+    const all = (await findTool("list_purchase_orders").handler({})) as { id: string; status: string }[];
+    const found = all.find((p) => p.id === po.id);
+    expect(found).toBeTruthy();
+
+    const matching = (await findTool("list_purchase_orders").handler({ status: found!.status })) as { id: string }[];
+    expect(matching.some((p) => p.id === po.id)).toBe(true);
+
+    const nonMatchingStatus = found!.status === "fulfilled" ? "compiled" : "fulfilled";
+    const nonMatching = (await findTool("list_purchase_orders").handler({ status: nonMatchingStatus })) as { id: string }[];
+    expect(nonMatching.some((p) => p.id === po.id)).toBe(false);
+  });
+
+  it("list_consumables with low_stock_only finds a freshly registered stocked item (starts at 0 on-hand)", async () => {
+    const consumable = await registerConsumable({ name: "QA Chat Consumable", unit: "each", stockingType: "stocked", reorderThreshold: 5 });
+    createdConsumableIds.push(consumable.id);
+
+    const all = (await findTool("list_consumables").handler({})) as { id: string }[];
+    expect(all.some((c) => c.id === consumable.id)).toBe(true);
+
+    const lowStock = (await findTool("list_consumables").handler({ low_stock_only: true })) as { id: string }[];
+    expect(lowStock.some((c) => c.id === consumable.id)).toBe(true);
+  });
+
+  it("list_sites finds a real, freshly registered site", async () => {
+    const site = await registerSite({ name: "QA Chat Site", type: "job_site" });
+    createdSiteIds.push(site.id);
+
+    const result = (await findTool("list_sites").handler({})) as { id: string; crew_today_count: number; open_alerts_count: number }[];
+    const found = result.find((s) => s.id === site.id);
+    expect(found).toBeTruthy();
+    expect(found!.crew_today_count).toBeGreaterThanOrEqual(0);
+    expect(found!.open_alerts_count).toBeGreaterThanOrEqual(0);
   });
 });
 

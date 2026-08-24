@@ -19,6 +19,17 @@ import { listAlerts } from "./alerts.js";
 import { getNotificationSettings } from "./notificationSettings.js";
 import { computeReconciliation } from "./payroll.js";
 import { getLlmSettings } from "./llmSettings.js";
+import { fetchSessionsInRange } from "./timeclockSessions.js";
+import { listPurchaseOrders, type PoStatus } from "./purchaseOrders.js";
+import { listConsumables } from "./consumables.js";
+import { listSitesWithActivityCounts } from "./sites.js";
+import {
+  getOpenAlertsBySeverity,
+  getCrewUtilizationToday,
+  getAvgAlertResolutionTime,
+  getPoSpendThisMonthByVendor,
+  getTimeclockHoursThisWeek,
+} from "./kpis.js";
 
 /* ── Tool registry ────────────────────────────────────────────────── */
 
@@ -35,12 +46,37 @@ function currentMonthRange(): { from: string; to: string } {
   return { from: from.toISOString(), to: now.toISOString() };
 }
 
+function todayRange(): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return { from: from.toISOString(), to: now.toISOString() };
+}
+
 export const TOOLS: ToolDefinition[] = [
   {
     name: "list_crew",
-    description: "Lists active crew members with their name, role, and phone number.",
-    parameters: { type: "object", properties: {} },
-    handler: async () => listCrewMembers({ active: true }),
+    description: "Lists active crew members with their name, role, and phone number. Filter to only those currently clocked in to see who's on site right now.",
+    parameters: {
+      type: "object",
+      properties: {
+        status: { type: "string", description: "'all' (default) for every active crew member, or 'clocked_in' for only those with an open timeclock session right now." },
+      },
+    },
+    handler: async (args) => {
+      const status = (args.status as string) ?? "all";
+      const crew = await listCrewMembers({ active: true });
+      if (status !== "clocked_in") return crew;
+      const settings = await getNotificationSettings();
+      const { from, to } = todayRange();
+      const sessions = await fetchSessionsInRange({
+        from,
+        to,
+        dailyOvertimeHours: settings.daily_overtime_hours,
+        breakRequiredAfterHours: settings.break_required_after_hours,
+      });
+      const clockedInIds = new Set(sessions.filter((s) => s.endedAt === null).map((s) => s.crewMemberId));
+      return crew.filter((c) => clockedInIds.has(c.id));
+    },
   },
   {
     name: "list_equipment",
@@ -71,6 +107,58 @@ export const TOOLS: ToolDefinition[] = [
       const recon = await computeReconciliation(crewMemberId, from, to);
       return { crew_member_name: crew.name, period: { from, to }, ...recon, break_required_after_hours: settings.break_required_after_hours };
     },
+  },
+  {
+    name: "get_kpis",
+    description: "Gets a snapshot of the five operational KPIs also shown on the BI Dashboards page: open alerts by severity, crew utilization today, average alert resolution time (last 30 days), purchase order spend this month by vendor, and timeclock hours this week. Use this for any 'how are we doing' or dashboard-summary style question.",
+    parameters: { type: "object", properties: {} },
+    handler: async () => {
+      const [openAlerts, crewUtilization, avgResolution, poSpend, timeclockHours] = await Promise.all([
+        getOpenAlertsBySeverity(),
+        getCrewUtilizationToday(),
+        getAvgAlertResolutionTime(),
+        getPoSpendThisMonthByVendor(),
+        getTimeclockHoursThisWeek(),
+      ]);
+      return { open_alerts: openAlerts, crew_utilization: crewUtilization, avg_alert_resolution: avgResolution, po_spend_this_month: poSpend, timeclock_hours_this_week: timeclockHours };
+    },
+  },
+  {
+    name: "list_purchase_orders",
+    description: "Lists purchase orders, optionally filtered by status. Statuses: compiled (draft), sent_to_office, forwarded_by_office, fulfilled, cancelled.",
+    parameters: {
+      type: "object",
+      properties: {
+        status: { type: "string", description: "Optional status filter: compiled, sent_to_office, forwarded_by_office, fulfilled, or cancelled. Omit to list all." },
+      },
+    },
+    handler: async (args) => {
+      const status = args.status as PoStatus | undefined;
+      return listPurchaseOrders(status ? { status } : undefined);
+    },
+  },
+  {
+    name: "list_consumables",
+    description: "Lists tracked consumable stock items (materials kept on hand, not ordered per-job). Set low_stock_only to true to see only items at or below their reorder threshold -- use this for 'what's running low' questions.",
+    parameters: {
+      type: "object",
+      properties: {
+        low_stock_only: { type: "boolean", description: "If true, return only stocked items at or below their reorder threshold." },
+      },
+    },
+    handler: async (args) => {
+      const all = await listConsumables();
+      if (!args.low_stock_only) return all;
+      return all.filter(
+        (c) => c.stocking_type === "stocked" && c.quantity_on_hand !== null && c.reorder_threshold !== null && Number(c.quantity_on_hand) <= Number(c.reorder_threshold),
+      );
+    },
+  },
+  {
+    name: "list_sites",
+    description: "Lists every site with how many crew are checked in there today and how many open alerts it has -- use this for 'what's happening at site X' or 'which site needs attention' questions.",
+    parameters: { type: "object", properties: {} },
+    handler: async () => listSitesWithActivityCounts(),
   },
 ];
 
