@@ -1,0 +1,8 @@
+[Unit]
+Description=External uptime check of the dcentral-fieldops facade/MCP box
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/home/ubuntu/ops-scripts/external-uptime-check.sh
