@@ -28,21 +28,30 @@ export async function getOrCreateSelfNode(): Promise<SelfNode> {
   if (!domain) throw new Error("NODE_DID_DOMAIN is required to bootstrap the self node's identity");
   const did = didWebForDomain(domain);
 
-  // Insert (and only then generate/store the keypair, not before) rather
-  // than the reverse -- if two processes race to bootstrap the self node
-  // at once (a real risk: multiple test files, or a future multi-instance
-  // deploy, all calling this on first use), the loser's INSERT fails on
-  // nodes_single_self_idx before it's generated any orphaned key material,
-  // and just re-reads the winner's row instead.
+  // Insert the node row and generate/store its keypair in the same
+  // transaction -- a real race found by CI (never surfaced locally,
+  // since the self node here was bootstrapped once, long ago, and this
+  // window never reopens): with two separate un-transacted statements, a
+  // concurrent caller's re-read (the UNIQUE_VIOLATION retry path below)
+  // could see the node row committed before the key was, and fail
+  // downstream with "no private key stored." Now the row is never
+  // visible to another connection until the key exists too -- either a
+  // concurrent caller's INSERT hits nodes_single_self_idx (nothing
+  // committed yet, so it correctly blocks until this transaction
+  // resolves) or it doesn't exist at all yet, never a partial state.
+  const client = await pool.connect();
   try {
-    const inserted = await pool.query(
+    await client.query("BEGIN");
+    const inserted = await client.query(
       `INSERT INTO nodes (did, display_name, is_self) VALUES ($1, 'dcentral-fieldops (self)', true) RETURNING id, did`,
       [did],
     );
+    await generateAndStoreKeyPair(did, client);
+    await client.query("COMMIT");
     cached = inserted.rows[0] as SelfNode;
-    await generateAndStoreKeyPair(did);
     return cached;
   } catch (err) {
+    await client.query("ROLLBACK");
     if (err && typeof err === "object" && "code" in err && err.code === UNIQUE_VIOLATION) {
       const retry = await pool.query("SELECT id, did FROM nodes WHERE is_self = true LIMIT 1");
       if (retry.rows[0]) {
@@ -51,5 +60,7 @@ export async function getOrCreateSelfNode(): Promise<SelfNode> {
       }
     }
     throw err;
+  } finally {
+    client.release();
   }
 }

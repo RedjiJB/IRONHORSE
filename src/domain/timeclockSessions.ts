@@ -48,12 +48,44 @@ export async function fetchSessionsInRange(args: {
 
 export function computeSessions(events: RawEvent[], dailyOvertimeHours: number, breakRequiredAfterHours: number): TimeclockSession[] {
   const sessions: TimeclockSession[] = [];
-  let current: { startedAt: Date; breakSeconds: number; breakStart: Date | null; siteIds: Set<string>; allVerified: boolean } | null = null;
+  let current: { crewMemberId: string; startedAt: Date; breakSeconds: number; breakStart: Date | null; siteIds: Set<string>; allVerified: boolean } | null = null;
 
+  // Callers pass events sorted by (crew_member_id, timestamp) across
+  // potentially many crew members in one query result -- a real bug,
+  // caught by CI against a fresh database (never surfaced against a
+  // long-lived local dev DB with only a handful of crew members active
+  // at once): the old code tracked one shared `current` session with no
+  // ownership check at all. A crew member's dangling open 'in' (no
+  // matching 'out' yet) would silently absorb the *next* crew member's
+  // events in the list -- their 'out' would incorrectly close someone
+  // else's session, and a session still open at the very end of the
+  // whole result set got attributed to whichever crew member's row
+  // happened to sort last, not whoever it actually belonged to. Real
+  // payroll-reconciliation implications, not just a display glitch.
+  // Fixed by closing out any dangling session the instant the
+  // crew_member_id changes, same as if that crew member's window had
+  // ended right there.
   for (const event of events) {
     const timestamp = new Date(event.timestamp);
+    if (current && current.crewMemberId !== event.crew_member_id) {
+      sessions.push({
+        crewMemberId: current.crewMemberId,
+        startedAt: current.startedAt,
+        endedAt: null,
+        breakSeconds: current.breakSeconds,
+        netSeconds: null,
+        grossHours: null,
+        incomplete: true,
+        overtime: false,
+        missedBreak: false,
+        siteIds: [...current.siteIds],
+        geofenceVerified: current.allVerified,
+      });
+      current = null;
+    }
+
     if (event.event_type === "in") {
-      current = { startedAt: timestamp, breakSeconds: 0, breakStart: null, siteIds: new Set(), allVerified: true };
+      current = { crewMemberId: event.crew_member_id, startedAt: timestamp, breakSeconds: 0, breakStart: null, siteIds: new Set(), allVerified: true };
     }
     if (!current) continue; // a break/out event with no preceding 'in' in this window is ignored, same as v1's session-boundary handling
     if (event.site_id) current.siteIds.add(event.site_id);
@@ -68,7 +100,7 @@ export function computeSessions(events: RawEvent[], dailyOvertimeHours: number, 
       const grossSeconds = (timestamp.getTime() - current.startedAt.getTime()) / 1000;
       const grossHours = grossSeconds / 3600;
       sessions.push({
-        crewMemberId: event.crew_member_id,
+        crewMemberId: current.crewMemberId,
         startedAt: current.startedAt,
         endedAt: timestamp,
         breakSeconds: current.breakSeconds,
@@ -85,10 +117,12 @@ export function computeSessions(events: RawEvent[], dailyOvertimeHours: number, 
   }
 
   // A still-open session at the end of the window is incomplete -- never
-  // guessed/estimated, same as v1.
+  // guessed/estimated, same as v1. Now correctly attributed to whichever
+  // crew member's own 'in' actually opened it (current.crewMemberId),
+  // not the last row in the whole result set.
   if (current) {
     sessions.push({
-      crewMemberId: events[events.length - 1].crew_member_id,
+      crewMemberId: current.crewMemberId,
       startedAt: current.startedAt,
       endedAt: null,
       breakSeconds: current.breakSeconds,
