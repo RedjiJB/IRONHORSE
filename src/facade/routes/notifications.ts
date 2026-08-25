@@ -47,8 +47,8 @@ export function registerNotificationRoutes(router: Router): void {
   router.get("/api/v1/notifications", async (req, res) => {
     try {
       await requireStaffRole(req);
-      const limit = getQueryInt(req, "limit", 50);
-      const offset = getQueryInt(req, "offset", 0);
+      const limit = getQueryInt(req, "limit", 50, { min: 1, max: 200 });
+      const offset = getQueryInt(req, "offset", 0, { min: 0 });
       const isReadParam = getQueryParam(req, "is_read");
       const acknowledged = isReadParam === undefined ? undefined : isReadParam === "true";
 

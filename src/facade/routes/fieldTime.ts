@@ -185,11 +185,12 @@ export function registerFieldTimeRoutes(router: Router): void {
     try {
       await requireStaffRole(req);
       const [crewMemberId, date] = id.split(":");
-      if (!crewMemberId || !date) {
+      const parsedDate = date ? new Date(`${date}T00:00:00.000Z`) : null;
+      if (!crewMemberId || !date || !parsedDate || Number.isNaN(parsedDate.getTime())) {
         sendJson(res, 404, { detail: "Not found" });
         return;
       }
-      const dayStart = new Date(`${date}T00:00:00.000Z`).toISOString();
+      const dayStart = parsedDate.toISOString();
       const dayEnd = new Date(`${date}T23:59:59.999Z`).toISOString();
       const timesheets = await buildTimesheets("", dayStart, dayEnd);
       const found = timesheets.find((t) => t.id === id);

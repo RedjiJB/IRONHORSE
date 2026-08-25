@@ -95,6 +95,27 @@ describe("GET /api/v1/notifications", () => {
     const res = await fetch(`${baseUrl}/api/v1/notifications`);
     expect(res.status).toBe(401);
   });
+
+  it("clamps out-of-range limit/offset instead of passing them straight into a raw SQL LIMIT/OFFSET", async () => {
+    // A negative offset previously reached listNotifications' raw SQL
+    // unclamped, where Postgres rejects "LIMIT/OFFSET must not be
+    // negative" -- surfaced as an opaque 500 via the generic handler
+    // instead of a clean, bounded response.
+    const negativeOffset = await authed("/api/v1/notifications?offset=-5");
+    expect(negativeOffset.status).toBe(200);
+    const negativeOffsetBody = await negativeOffset.json();
+    expect(negativeOffsetBody.offset).toBe(0);
+
+    const negativeLimit = await authed("/api/v1/notifications?limit=-1");
+    expect(negativeLimit.status).toBe(200);
+    const negativeLimitBody = await negativeLimit.json();
+    expect(negativeLimitBody.limit).toBeGreaterThanOrEqual(1);
+
+    const hugeLimit = await authed("/api/v1/notifications?limit=50000000");
+    expect(hugeLimit.status).toBe(200);
+    const hugeLimitBody = await hugeLimit.json();
+    expect(hugeLimitBody.limit).toBeLessThanOrEqual(200);
+  });
 });
 
 describe("GET /api/v1/notifications/unread-count", () => {

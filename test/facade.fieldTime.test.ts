@@ -137,6 +137,12 @@ describe("GET /api/v1/field-time/timesheets/:id/", () => {
 
     const nonexistent = await authed("/api/v1/field-time/timesheets/00000000-0000-0000-0000-000000000000:2026-01-15/");
     expect(nonexistent.status).toBe(404);
+
+    // Both segments present but the date half doesn't parse -- must 404
+    // cleanly, not throw a RangeError from new Date(...).toISOString()
+    // that the generic error handler would surface as an opaque 500.
+    const unparsableDate = await authed(`/api/v1/field-time/timesheets/${crewId}:not-a-date/`);
+    expect(unparsableDate.status).toBe(404);
   });
 });
 

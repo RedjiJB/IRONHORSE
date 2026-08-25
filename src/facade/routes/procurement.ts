@@ -141,10 +141,30 @@ export function registerProcurementRoutes(router: Router): void {
         sendJson(res, 422, { detail: "Add at least one item" });
         return;
       }
+      let cost: number | undefined;
+      if (body.amount_total != null && body.amount_total !== "") {
+        cost = Number(body.amount_total);
+        if (!Number.isFinite(cost)) {
+          sendJson(res, 422, { detail: "amount_total must be a valid number" });
+          return;
+        }
+      }
+      const parsedItems: { description: string; quantity?: number }[] = [];
+      for (const i of items) {
+        let quantity: number | undefined;
+        if (i.quantity != null && i.quantity !== "") {
+          quantity = Number(i.quantity);
+          if (!Number.isFinite(quantity)) {
+            sendJson(res, 422, { detail: "item quantity must be a valid number" });
+            return;
+          }
+        }
+        parsedItems.push({ description: i.description, quantity });
+      }
       await createFreeformPurchaseOrder({
         vendorId: body.vendor_contact_id,
-        cost: body.amount_total ? Number(body.amount_total) : undefined,
-        items: items.map((i) => ({ description: i.description, quantity: i.quantity ? Number(i.quantity) : undefined })),
+        cost,
+        items: parsedItems,
       });
       sendJson(res, 200, { vendor_warnings: [] satisfies string[] });
     } catch (err) {

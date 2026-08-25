@@ -43,9 +43,17 @@ export function getQueryParam(req: IncomingMessage, name: string): string | unde
   return url.searchParams.get(name) ?? undefined;
 }
 
-export function getQueryInt(req: IncomingMessage, name: string, fallback: number): number {
+export function getQueryInt(
+  req: IncomingMessage,
+  name: string,
+  fallback: number,
+  bounds?: { min?: number; max?: number },
+): number {
   const raw = getQueryParam(req, name);
   if (raw == null) return fallback;
   const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  if (!Number.isFinite(parsed)) return fallback;
+  if (bounds?.min != null && parsed < bounds.min) return bounds.min;
+  if (bounds?.max != null && parsed > bounds.max) return bounds.max;
+  return parsed;
 }

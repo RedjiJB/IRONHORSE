@@ -91,6 +91,27 @@ describe("POST /api/v1/procurement", () => {
     });
     expect(res.status).toBe(422);
   });
+
+  it("422s on a non-numeric amount_total instead of silently writing NaN/Infinity into purchase_orders.cost", async () => {
+    const res = await authed("/api/v1/procurement", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ amount_total: "not-a-number", items: [{ description: "QA bad amount", quantity: "1" }] }),
+    });
+    expect(res.status).toBe(422);
+
+    const row = await pool.query("SELECT cost FROM purchase_orders WHERE cost = 'NaN'");
+    expect(row.rowCount).toBe(0);
+  });
+
+  it("422s on a non-numeric item quantity", async () => {
+    const res = await authed("/api/v1/procurement", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [{ description: "QA bad quantity", quantity: "abc" }] }),
+    });
+    expect(res.status).toBe(422);
+  });
 });
 
 describe("GET /api/v1/procurement", () => {
