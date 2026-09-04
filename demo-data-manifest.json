@@ -1,0 +1,46 @@
+{
+  "crewMembers": [
+    "e2d53ec3-961e-4032-bb02-2582f103eb3c",
+    "c488c8f7-1ef0-4361-b7a6-9d3aa08c910e",
+    "22697666-5daf-4dba-b367-4e99cd8d14ef"
+  ],
+  "sites": [
+    "2cb7a09d-5b66-4893-a9e4-87fd7e47cba9",
+    "6937a649-9f6f-449d-a2f8-25462575d553",
+    "92d59da1-511a-47de-a9cd-7ee434ab8eab"
+  ],
+  "vehicles": [
+    "9bfbcd13-1342-4689-9e9c-279c99bd2331",
+    "d4b15d2f-0149-4ce7-a9cb-5bd1e6bc421d",
+    "6df72ce8-52a2-4ca0-b6c8-2f95a70c2a34"
+  ],
+  "assets": [
+    "0cddd35f-73f4-4131-a70c-368248c4af8a",
+    "ca06c4b8-5415-4519-a2a2-5da5b04bb195",
+    "ce8e2997-281d-4053-8a2c-0e989cb0bc01",
+    "66a2f6a4-896c-462c-95f4-4c55c83d5877"
+  ],
+  "consumables": [
+    "b7281700-6fc8-493f-9c32-e93a2475f03d",
+    "8a6a3abd-6142-4a56-bee8-77c363fff59d",
+    "99dcf54d-16bf-4048-b06d-3ae30d07ddd9",
+    "bd28fb6a-2ed8-49ab-947e-f6369d7c0608"
+  ],
+  "vendors": [
+    "ce953240-ec5b-4585-a8e3-dda897265185",
+    "208657cd-7f67-453f-bcd6-8e22472d75f4",
+    "2191d3c1-b983-4439-b3c8-2d9d76453302"
+  ],
+  "purchaseOrders": [
+    "3c865194-6b0f-483a-ae3e-777f48fb983c",
+    "487ad1f0-3cb1-4cd3-9c0f-0ec39c3fb1bc",
+    "ef50740e-0d1a-4a2e-903a-2d35b5ca0fe1"
+  ],
+  "alerts": [
+    "9f1ae55a-6998-49d5-ae23-fa035e303aaa",
+    "c45067dc-d582-409b-97b5-3233df70e20b"
+  ],
+  "checkouts": [
+    "14d37eed-789f-45ac-8d92-c60cacab0d0c"
+  ]
+}

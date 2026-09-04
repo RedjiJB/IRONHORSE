@@ -1,0 +1,374 @@
+<title>A Day at Sod Boys</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #f7f9f4;
+    --surface: #ffffff;
+    --surface-2: #eef2ea;
+    --ink: #16231a;
+    --ink-soft: #4b5a49;
+    --hairline: #dde4d6;
+    --accent: #2e7d3e;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3f0e4;
+    --earth: #a8632f;
+    --earth-soft: #f3e4d6;
+    --critical: #b3432b;
+    --critical-soft: #fbe4de;
+    --chrome: #e9ede4;
+    --shadow: 0 1px 2px rgba(22,35,26,0.06), 0 8px 24px -12px rgba(22,35,26,0.18);
+    --radius: 14px;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10160f;
+      --surface: #171f15;
+      --surface-2: #1e281b;
+      --ink: #e9efe4;
+      --ink-soft: #a9b8a3;
+      --hairline: #2b3627;
+      --accent: #5fb96e;
+      --accent-ink: #0d1a0f;
+      --accent-soft: #1c3320;
+      --earth: #d99a63;
+      --earth-soft: #33261a;
+      --critical: #e2775f;
+      --critical-soft: #3a2119;
+      --chrome: #1c2519;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #10160f;
+    --surface: #171f15;
+    --surface-2: #1e281b;
+    --ink: #e9efe4;
+    --ink-soft: #a9b8a3;
+    --hairline: #2b3627;
+    --accent: #5fb96e;
+    --accent-ink: #0d1a0f;
+    --accent-soft: #1c3320;
+    --earth: #d99a63;
+    --earth-soft: #33261a;
+    --critical: #e2775f;
+    --critical-soft: #3a2119;
+    --chrome: #1c2519;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  a { color: inherit; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* ---------- shell ---------- */
+  .page { max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+  @media (max-width: 720px) { .page { padding: 0 18px; } }
+
+  header.top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0 18px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
+  .brand .tag { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); border: 1px solid var(--hairline); padding: 3px 8px; border-radius: 999px; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 76px 0 56px; }
+  .hero .kicker { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 18px; }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: clamp(2.4rem, 5.2vw, 4rem);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin: 0 0 22px;
+    text-wrap: balance;
+    max-width: 14ch;
+  }
+  .hero h1 em { font-style: italic; color: var(--accent); }
+  .hero p.lede { font-size: 1.15rem; color: var(--ink-soft); max-width: 46ch; margin: 0 0 34px; }
+  .hero .facts { display: flex; gap: 28px; flex-wrap: wrap; }
+  .fact { }
+  .fact .n { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 500; color: var(--ink); display: block; }
+  .fact .l { font-size: 0.82rem; color: var(--ink-soft); }
+
+  /* ---------- layout with rail ---------- */
+  .body-grid {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 36px;
+    position: relative;
+  }
+  @media (max-width: 860px) {
+    .body-grid { grid-template-columns: 1fr; }
+    .rail { display: none; }
+  }
+
+  .rail {
+    position: sticky; top: 0; align-self: start;
+    height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 12px;
+  }
+  .rail .line { width: 2px; flex: 1; background: var(--hairline); position: relative; border-radius: 2px; overflow: hidden; }
+  .rail .line::after {
+    content: ""; position: absolute; left: 0; top: 0; width: 100%;
+    height: var(--fill, 8%);
+    background: var(--accent);
+    border-radius: 2px;
+    transition: height 0.2s linear;
+  }
+  .rail .clock { font-family: var(--font-mono); font-size: 0.68rem; color: var(--ink-soft); writing-mode: vertical-rl; margin-top: 10px; letter-spacing: 0.08em; }
+
+  main { min-width: 0; }
+
+  /* ---------- acts ---------- */
+  .act { padding: 64px 0 32px; border-top: 1px solid var(--hairline); }
+  .act:first-of-type { border-top: none; padding-top: 0; }
+  .act-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  .act-eyebrow { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+  .act-eyebrow.earth { color: var(--earth); }
+  .act h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(1.7rem, 3.4vw, 2.3rem); margin: 4px 0 10px; text-wrap: balance; }
+  .act .dek { color: var(--ink-soft); max-width: 60ch; margin: 0 0 36px; font-size: 1.02rem; }
+
+  .beats { display: flex; flex-direction: column; gap: 18px; margin-bottom: 40px; }
+  .beat { display: grid; grid-template-columns: 110px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 560px) { .beat { grid-template-columns: 1fr; gap: 4px; } }
+  .beat .time { font-family: var(--font-mono); font-size: 0.82rem; color: var(--ink-soft); padding-top: 3px; }
+  .beat .say { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow); }
+  .beat .say strong { display: block; margin-bottom: 4px; font-size: 0.95rem; }
+  .beat .say p { margin: 0; color: var(--ink-soft); font-size: 0.94rem; }
+
+  /* ---------- browser chrome mock ---------- */
+  .browser {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px;
+    overflow: hidden; box-shadow: var(--shadow); margin: 28px 0 40px;
+  }
+  .browser .bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--chrome); border-bottom: 1px solid var(--hairline); }
+  .browser .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--hairline); }
+  .browser .url { font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--hairline); border-radius: 999px; padding: 3px 12px; margin-left: 6px; }
+  .browser .screen { padding: 22px; }
+
+  .site-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .site-card { border: 1px solid var(--hairline); border-radius: 10px; padding: 14px; background: var(--ground); }
+  .site-card .name { font-weight: 600; font-size: 0.92rem; margin-bottom: 3px; }
+  .site-card .addr { font-size: 0.78rem; color: var(--ink-soft); }
+  .site-card .crew { font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent); margin-top: 8px; }
+
+  .alert-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+  .alert-row:last-child { border-bottom: none; }
+  .alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+  .alert-dot.critical { background: var(--critical); }
+  .alert-dot.routine { background: var(--earth); }
+  .alert-row .txt strong { font-size: 0.9rem; display: block; }
+  .alert-row .txt span { font-size: 0.82rem; color: var(--ink-soft); }
+  .alert-row .ts { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-soft); white-space: nowrap; }
+
+  table.mock { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  table.mock th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--hairline); }
+  table.mock td { padding: 10px; border-bottom: 1px solid var(--hairline); }
+  table.mock tr:last-child td { border-bottom: none; }
+  table.mock .mono { font-family: var(--font-mono); font-size: 0.82rem; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+  .pill.active { background: var(--accent-soft); color: var(--accent); }
+  .pill.draft { background: var(--surface-2); color: var(--ink-soft); }
+  .pill.issued { background: var(--earth-soft); color: var(--earth); }
+
+  /* ---------- phone mock ---------- */
+  .phone-wrap { display: flex; justify-content: center; margin: 28px 0 40px; }
+  .phone {
+    width: min(340px, 100%); background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 32px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .phone .head { background: var(--accent); color: var(--accent-ink); padding: 16px 18px 14px; display: flex; align-items: center; gap: 10px; }
+  .phone .head .avatar { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600; }
+  .phone .head .who { font-weight: 600; font-size: 0.92rem; }
+  .phone .head .num { font-family: var(--font-mono); font-size: 0.68rem; opacity: 0.85; }
+  .phone .thread { padding: 16px; display: flex; flex-direction: column; gap: 10px; min-height: 220px; }
+  .bubble { max-width: 82%; padding: 9px 13px; border-radius: 16px; font-size: 0.88rem; line-height: 1.4; }
+  .bubble.out { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+  .bubble.in { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+  .bubble .meta { display: block; font-family: var(--font-mono); font-size: 0.62rem; margin-top: 4px; opacity: 0.7; }
+
+  /* ---------- closing ---------- */
+  .close { padding: 70px 0 90px; text-align: center; }
+  .close h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(1.8rem, 4vw, 2.6rem); max-width: 20ch; margin: 0 auto 16px; text-wrap: balance; }
+  .close p { color: var(--ink-soft); max-width: 44ch; margin: 0 auto 30px; }
+  .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn { font-family: var(--font-body); font-weight: 600; font-size: 0.92rem; padding: 12px 22px; border-radius: 999px; border: 1px solid var(--hairline); cursor: pointer; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .btn.ghost { background: transparent; color: var(--ink); }
+
+  footer.foot { border-top: 1px solid var(--hairline); padding: 22px 0 40px; font-size: 0.78rem; color: var(--ink-soft); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+</style>
+
+<div class="page">
+  <header class="top">
+    <div class="brand">🌱 Sod Boys <span style="font-weight:400;color:var(--ink-soft)">FieldOps</span> <span class="tag">Live demo</span></div>
+  </header>
+
+  <section class="hero">
+    <p class="kicker">A day at Sod Boys Ltd</p>
+    <h1>One crew.<br>One text thread.<br><em>One system of record.</em></h1>
+    <p class="lede">Everything on this page is real — a working field-operations platform for a landscaping company in Ottawa, not a mockup. A crew member never opens an app. They text. The office never re-keys anything. It's already there.</p>
+    <div class="facts">
+      <div class="fact"><span class="n">3</span><span class="l">active job sites</span></div>
+      <div class="fact"><span class="n">3</span><span class="l">crew, one foreman</span></div>
+      <div class="fact"><span class="n">0</span><span class="l">apps the crew installs</span></div>
+    </div>
+  </section>
+
+  <div class="body-grid">
+    <div class="rail" aria-hidden="true">
+      <div class="line" id="railFill" style="--fill:6%"></div>
+      <div class="clock">6 AM → 6 PM</div>
+    </div>
+
+    <main>
+
+      <section class="act" id="act1" data-act>
+        <div class="act-head"><span class="act-eyebrow">Act one · 7:00 AM</span></div>
+        <h2>The office, before the trucks leave</h2>
+        <p class="dek">Sites, weather, equipment, and every alert the system raised overnight — the morning glance an owner or dispatcher takes before the day starts.</p>
+
+        <div class="browser">
+          <div class="bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="url">dashboard.sodboysltd.org</div></div>
+          <div class="screen">
+            <div class="site-cards">
+              <div class="site-card"><div class="name">142 Riverside Residence</div><div class="addr">142 Riverside Dr, Ottawa</div><div class="crew">● Jake, Mia on site</div></div>
+              <div class="site-card"><div class="name">88 Elmwood Crescent</div><div class="addr">88 Elmwood Cres, Ottawa</div><div class="crew">● Tyler on site</div></div>
+              <div class="site-card"><div class="name">Bank St. Commercial Plaza</div><div class="addr">2210 Bank St, Ottawa</div><div class="crew" style="color:var(--earth)">◐ 1 open alert</div></div>
+            </div>
+            <div class="alert-row">
+              <div class="alert-dot routine"></div>
+              <div class="txt"><strong>Maintenance due</strong><span>Sod Cutter due for scheduled service</span></div>
+              <div class="ts">7:14 AM</div>
+            </div>
+            <div class="alert-row">
+              <div class="alert-dot critical"></div>
+              <div class="txt"><strong>Idle alert</strong><span>Truck SDBY-204 idle at Bank St. Plaza for 2+ hrs</span></div>
+              <div class="ts">7:22 AM</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="beats">
+          <div class="beat"><div class="time">Say</div><div class="say"><p>"Nothing here was typed in by a person watching a clock. The idle-vehicle alert came from the truck's own telemetry. The maintenance alert came from a service interval the system is tracking on its own."</p></div></div>
+        </div>
+      </section>
+
+      <section class="act" id="act2" data-act>
+        <div class="act-head"><span class="act-eyebrow">Act two · 7:45 AM</span></div>
+        <h2>Equipment, crew, and the paper trail</h2>
+        <p class="dek">The register that everything else is built on — every vehicle's last known location, every crew member's rate, every purchase order in flight.</p>
+
+        <div class="browser">
+          <div class="bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="url">dashboard.sodboysltd.org/resources</div></div>
+          <div class="screen">
+            <table class="mock">
+              <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">+1613 581 3385</td><td>Nick</td><td>Owner</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">+1647 802 1787</td><td>Vicki</td><td>Management</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">JT-01</td><td>Jake Tremblay</td><td>Foreman</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">MC-02</td><td>Mia Chen</td><td>Crew</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">TB-03</td><td>Tyler Brooks</td><td>Crew</td><td><span class="pill active">Active</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="browser">
+          <div class="bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="url">dashboard.sodboysltd.org/procurement</div></div>
+          <div class="screen">
+            <table class="mock">
+              <thead><tr><th>Vendor</th><th>Items</th><th>Amount</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Ottawa Turf Supply Co.</td><td>Sod rolls · 500 sq ft</td><td class="mono">$2,450</td><td><span class="pill issued">Issued</span></td></tr>
+                <tr><td>Petro-Canada Fleet Fuel</td><td>Diesel delivery</td><td class="mono">$680</td><td><span class="pill issued">Issued</span></td></tr>
+                <tr><td>Stihl Dealer Ottawa</td><td>Trimmer line + parts</td><td class="mono">$340</td><td><span class="pill draft">Draft</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="beats">
+          <div class="beat"><div class="time">Say</div><div class="say"><p>"This is the same crew roster the WhatsApp bot resolves a phone number against. One table. Not a CRM the field forgets to update."</p></div></div>
+        </div>
+      </section>
+
+      <section class="act" id="act3" data-act>
+        <div class="act-head"><span class="act-eyebrow earth">Act three · 8:03 AM</span></div>
+        <h2>The crew clocks in — by text</h2>
+        <p class="dek">No app to install, no login, no PIN. The bot knows who's texting from the phone number alone, and writes straight into the same database Payroll reads from.</p>
+
+        <div class="phone-wrap">
+          <div class="phone">
+            <div class="head"><div class="avatar">SB</div><div><div class="who">Sod Boys Dispatch</div><div class="num">+1 343 204 0439</div></div></div>
+            <div class="thread">
+              <div class="bubble out">clocking in at riverside<span class="meta">Jake · 8:03 AM</span></div>
+              <div class="bubble in">Got it, Jake — logged in at 142 Riverside Residence, 8:03 AM. Mia's already there too.<span class="meta">Bot</span></div>
+              <div class="bubble out">whats the weather like there today<span class="meta">8:04 AM</span></div>
+              <div class="bubble in">Riverside: 22°C, light cloud, 11mm rain expected — should hold off till afternoon. Good window for sod.<span class="meta">Bot</span></div>
+              <div class="bubble out">grabbed trimmer line at the hardware store, $42 [photo]<span class="meta">11:40 AM</span></div>
+              <div class="bubble in">Logged — $42, trimmer line. Sent to the office for approval, you'll see it reflected once Vicki confirms.<span class="meta">Bot</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="beats">
+          <div class="beat"><div class="time">Say</div><div class="say"><strong>Money never moves on a text alone.</strong><p>That $42 receipt didn't hit the books — it queued as a pending confirmation. Flip back to Notifications and it's sitting there, waiting on the office.</p></div></div>
+          <div class="beat"><div class="time">Then</div><div class="say"><strong>Same thread, whole day.</strong><p>Overtime requests, low-stock flags, equipment problems, clock-out — all of it lands as a real, timestamped record. No phone call the office might miss.</p></div></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <section class="close">
+    <h2>Two windows. One truth.</h2>
+    <p>The phone and the office aren't two systems that sync — they're two views of the same database. Ask us to walk through your own crew's day.</p>
+    <div class="cta-row">
+      <button class="btn primary" type="button" onclick="sendPrompt('Tell me more about scheduling a live demo of Sod Boys FieldOps')">Book a live walkthrough</button>
+      <button class="btn ghost" type="button" onclick="sendPrompt('What does it take to set up FieldOps for a new crew?')">How setup works</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Sod Boys Ltd · FieldOps v2.0.0</span>
+    <span>Demo data — real system, fictional crew day</span>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var fill = document.getElementById('railFill');
+    var acts = Array.prototype.slice.call(document.querySelectorAll('[data-act]'));
+    if (!fill || !acts.length) return;
+    function onScroll() {
+      var doc = document.documentElement;
+      var scrolled = window.scrollY;
+      var max = doc.scrollHeight - window.innerHeight;
+      var pct = max > 0 ? Math.min(100, Math.max(4, (scrolled / max) * 100)) : 4;
+      fill.style.setProperty('--fill', pct + '%');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
