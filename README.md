@@ -1,16 +1,19 @@
 # IRONHORSE
 
 Security-guard operations platform (client sites, guard shifts, patrols,
-incidents, supervisors, optional camera integration). Currently
-**pre-repo / planning-stage** — no application code exists yet. This repo
-currently holds only documentation, assembled to carry a planning
-conversation into a fresh session without losing context.
+incidents, supervisors, optional camera integration). **Phase 0 (repo
+bootstrap) is done** — see [`docs/ROADMAP.md`](docs/ROADMAP.md). The identity/
+capability layer and MCP/façade scaffold are in place and verified (build +
+tests pass); `src/domain/` is still empty — IRONHORSE's own domain modules
+(sites, guards, shifts, patrols, incidents, cameras) are Phase 1/2 work.
 
-**Architectural precedent**: the design leans heavily on patterns already
-proven in `dcentral-fieldops` (the Sod Boys Ltd field-operations system,
+**Architectural precedent**: forked at the git level from `dcentral-fieldops`
+(the Sod Boys Ltd field-operations system,
 `https://github.com/RedjiJB/sodboys-fieldops.git`, local clone at
 `C:\Users\jredj\dev\dcentral-fieldops`) — same domain-module style, same
-capability-gating approach, same sovereignty-tiering discipline.
+capability-gating approach, same sovereignty-tiering discipline. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) Phase 0 for exactly what was kept vs.
+pruned.
 
 ## Documentation
 
@@ -40,8 +43,9 @@ answers your current question:
 
 Read `docs/PRECEDENT-ARCHITECTURE.md` in full, then the relevant section of
 `docs/DOMAIN-DESIGN.md` for whatever module you're about to build, and check
-`docs/ROADMAP.md`'s blocker table for open questions that need resolving
-first. Several features are explicitly marked **[gap]** throughout this doc
-set — they were referenced in the original planning conversation without
-their full design being captured, and need the user's input before they're
-safe to design around.
+`docs/ROADMAP.md`'s blocker table for anything still open. All three
+originally-**[gap]** design questions (duress button, patrol scheduling,
+certification gating) were resolved 2026-09-04 — see `docs/PROJECT-BRIEF.md`
+§3. The one remaining real blocker is the camera module's
+`policy/sovereignty_tiers.yaml` entry, needed per vendor adapter before that
+module ships.

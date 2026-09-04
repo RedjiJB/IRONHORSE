@@ -16,11 +16,18 @@ a domain module (`src/domain/*.ts`), a numbered migration
 
 ## 1. `patrols.ts` + `checkpoints.ts`
 
-**Status: [gap]** — the original planning conversation referenced "the
-patrol/checkpoint module from earlier" without capturing its design. What
-follows is a first-pass sketch built from the feature description alone
-("QR/NFC/GPS-verified patrol routes with exception reporting"); confirm the
-real design intent with the user before treating this as settled.
+**Status: resolved (2026-09-04)**. Originally referenced as "the
+patrol/checkpoint module from earlier" without a captured design; the open
+scheduling question below has now been answered by the user.
+
+**Decision — patrol runs require a shift**: `patrol_runs.shift_id` is a
+**required, non-nullable FK**, not optional. A guard can only start a patrol
+route while clocked into a shift at that site. Reasoning: keeps patrol
+activity accountable to a specific assignment, and anchors missed-checkpoint
+exception logic (route pace expectations) to a real shift window instead of
+needing a fallback for standalone runs. A supervisor's own spot-check
+patrol is a distinct check-in type (`FEATURES.md` §3's "site visit /
+spot-check logging"), not a `patrol_run` — it doesn't need this FK.
 
 **Proposed shape**:
 
@@ -29,9 +36,9 @@ real design intent with the user before treating this as settled.
 - `checkpoints` — `id`, `patrol_route_id`, `sequence`, `label`, `verification_method`
   (`qr` | `nfc` | `gps`), `qr_or_nfc_token` (nullable — only for those methods),
   `lat`/`lng`/`radius_m` (nullable — only for `gps`).
-- `patrol_runs` — `id`, `patrol_route_id`, `guard_crew_member_id`, `started_at`,
-  `completed_at` (nullable), `status` (`in_progress` | `completed` |
-  `abandoned`).
+- `patrol_runs` — `id`, `patrol_route_id`, `guard_crew_member_id`, `shift_id`
+  (required FK — see decision above), `started_at`, `completed_at`
+  (nullable), `status` (`in_progress` | `completed` | `abandoned`).
 - `checkpoint_scans` — `id`, `patrol_run_id`, `checkpoint_id`, `scanned_at`,
   `verified` (bool — did the QR/NFC/GPS check actually pass), `exception_note`
   (nullable — a guard's free-text note when a checkpoint was skipped or an
@@ -39,13 +46,10 @@ real design intent with the user before treating this as settled.
 
 **Reused patterns**: GPS-method checkpoints reuse `resolveGeofenceVerified`
 directly, same as guard shift check-in. A missed checkpoint (no scan within
-some window of the route's expected pace) is a natural `exceptions.ts`-style
-check, feeding an `alerts.ts` row — same "extend the existing exceptions
-engine" approach `FEATURES.md` §4 already calls for.
-
-**Open question for the user**: does a `patrol_run` need to be pre-scheduled
-(tied to a shift), or can a guard start one ad hoc? This changes whether
-`patrol_runs` needs a `shift_id` FK.
+some window of the route's expected pace, computed against the linked
+shift's window) is a natural `exceptions.ts`-style check, feeding an
+`alerts.ts` row — same "extend the existing exceptions engine" approach
+`FEATURES.md` §4 already calls for.
 
 ## 2. `incidents.ts`
 
@@ -83,31 +87,40 @@ editable text columns.
 
 ## 3. Duress/panic alerts
 
-**Status: [gap]** — "the earlier brainstorm" is referenced but not captured.
-Sketched here as a *minimal* first design to unblock discussion, not a
-finished spec.
+**Status: resolved (2026-09-04)**. Originally "the earlier brainstorm,"
+referenced but not captured; the four open questions below have now been
+answered by the user.
 
-**Proposed shape**: rather than a new table, this is plausibly best modeled as
-a specific `incidents.category = 'duress'` row with `severity` forced to
-`critical` at creation — reuses the same action/escalation/media machinery
-above instead of a parallel system. The distinguishing behavior is entirely in
-the **client and alerting path**, not the data model:
+**Proposed shape**: rather than a new table, this is modeled as a specific
+`incidents.category = 'duress'` row with `severity` forced to `critical` at
+creation — reuses the same action/escalation/media machinery from §2 instead
+of a parallel system. The distinguishing behavior is entirely in the
+**client and alerting path**, not the data model:
 
-- Guard app: a duress trigger is a single, hard-to-mis-tap control, separate
-  from the normal "report incident" flow (the feature list explicitly calls
-  for this to be a *silent* alarm — no confirmation dialog, no "are you sure").
-- Alert routing: a `duress` incident should page **every supervisor
-  overseeing that site immediately**, not the normal notification-priority
-  queue — this is the one incident type where the precedent system's flat
-  "re-page the same recipients until acknowledged" escalation pattern
-  (`exceptions.ts`/`notifications.ts`) should apply at its most aggressive
-  settings, not the default.
-
-**Open questions for the user**: What exactly gets sent on trigger (location
-only, or an open audio/video channel)? Does the guard app show any UI feedback
-that duress mode is active, or does it need to look identical to normal use
-for the guard's safety? These materially change the design and should be
-resolved before implementation, not assumed.
+- **Trigger UX — dedicated hardware button**: a physical trigger (phone
+  power-button pattern, e.g. 3× quick press, or a paired wearable/fob), not
+  an in-app control — works even with the phone locked or screen off, which
+  matters most under real duress. This needs OS-level background listening
+  (battery/permissions implications on both iOS and Android) — flag as a
+  real implementation risk for whoever scopes the guard app's native shell
+  in Phase 2, not a trivial add-on to a web-based app shell.
+- **Payload — location + timestamp only**: guard identity, site, GPS
+  location, and trigger time. Nothing richer (no audio/video channel).
+  Matches the precedent's telemetry-exemption reasoning
+  (`PRECEDENT-ARCHITECTURE.md` §5) — this is location data the guard's
+  device already emits, kept minimal so the alert sends fast even on a poor
+  connection.
+- **UI feedback — subtle, deniable**: after triggering, the guard app shows
+  a near-invisible cue (e.g. a small icon change or a distinct vibration
+  pattern) confirming the alert is active/sending — not a full on-screen
+  banner (which would defeat the "must look identical to normal use if
+  someone is watching the guard's screen" safety property), but also not
+  zero feedback (the guard gets some confirmation it worked).
+- **Alert routing — every supervisor overseeing that site**: a `duress`
+  incident pages every supervisor scoped to the site, not just the guard's
+  own assigned supervisor, at the precedent's most aggressive
+  "re-page-until-acknowledged" escalation setting
+  (`exceptions.ts`/`notifications.ts`), not the default priority queue.
 
 ## 4. `cameras.ts`
 
@@ -160,19 +173,28 @@ decision and its own phase — never fold it into this module's scope.
 
 ## 5. Certification gating
 
-**Status: [gap]** — referenced twice in the planning conversation
+**Status: resolved (2026-09-04)**. Originally referenced twice
 ("certification-gap checks" in the exceptions engine, "guard performance/
-compliance glance" in the supervisor app) but the actual rule model isn't
-captured.
+compliance glance" in the supervisor app) without a captured rule model; the
+two open questions below have now been answered by the user.
 
-**Open questions for the user**, needed before this can be designed
-concretely: How is a "required site cert" defined and attached to a site — a
-site-level list of required cert types, or something more granular (per-post)?
-Is gating a hard block (assignment structurally cannot be made) or a
-soft flag (assignment allowed, but surfaced as a warning to the supervisor)?
-The precedent system's own conventions favor being explicit about this kind of
-distinction rather than defaulting to one — see how `alerts.ts` deliberately
-separates "acknowledged" from "resolved" as two different real states, and
-apply the same instinct here: don't collapse "guard lacks cert" into a single
-undifferentiated warning if a hard-block case and a soft-flag case are both
-real requirements.
+**Decision — per-post granular, soft flag**:
+
+- **Granularity**: required certs attach to individual **posts** within a
+  site, not the site as a whole. A site with a mixed roster (e.g. an armed
+  perimeter post and an unarmed lobby post) needs different cert
+  requirements per post, not one undifferentiated site-level list. Proposed
+  shape: a `post_required_certs` table — `id`, `post_id`, `cert_type`,
+  `required` — rather than a single column on `sites`.
+- **Gating behavior**: a missing cert is a **soft flag, not a hard block**.
+  The assignment can still be made — the gap is surfaced as a visible,
+  auditable warning to the supervisor at assignment time (ties into
+  `FEATURES.md` §3's "guard performance/compliance glance before
+  last-minute assignment"), not structurally prevented. This trades some
+  compliance safety for the flexibility a real staffing operation needs
+  (e.g. covering a last-minute no-show with the best available guard rather
+  than leaving a post unstaffed) — same instinct the precedent applies
+  elsewhere of treating "flagged but allowed" and "blocked" as genuinely
+  different states rather than collapsing them, just resolved toward the
+  flag side here since a hard block was judged too rigid for staffing
+  reality.

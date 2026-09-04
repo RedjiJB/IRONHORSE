@@ -12,33 +12,31 @@ order with the user, especially anywhere a **[gap]** item from
 
 ---
 
-## Phase 0 — Repo bootstrap (not started)
+## Phase 0 — Repo bootstrap (done, 2026-09-04)
 
-Before any domain code:
-
-- [ ] Decide the repo relationship to `dcentral-fieldops`: fresh repo copying
-      patterns by hand, or something more structural (shared package, fork).
-      `PROJECT-BRIEF.md` §4.4 flags this as unresolved — the user has since
-      confirmed IRONHORSE is a fresh, empty repo, but *how much* gets copied
-      vs. rebuilt is still open.
-- [ ] Decide whether IRONHORSE reuses the same D-Central identity/capability
-      stack (`did:web`, JWT-VCs, capability tiers) as-is, or a simplified
-      version of it. Given the precedent's own hard-won lesson (Veramo tried
-      and reversed, 171→89 dependencies), **don't re-litigate the DID/VC
-      library choice** — inherit `PRECEDENT-ARCHITECTURE.md` §2's decisions
-      directly unless there's a specific reason IRONHORSE's needs differ.
-- [ ] Stand up the same base project shape: `src/identity/`, `src/domain/`,
-      `src/db/migrations/`, `src/mcp/tools/`, `policy/sovereignty_tiers.yaml`.
-- [ ] Decide the frontend approach — reuse the same vendored
-      OpenConstructionERP fork (inherits its AGPL-3.0 obligations, see
-      `PRECEDENT-ARCHITECTURE.md` §7), a fresh vendored frontend, or a
-      purpose-built mobile app given the guard/supervisor apps are the primary
-      surface (unlike the precedent system, which is dashboard-first).
-      **This decision matters more for IRONHORSE than it did for the
-      precedent system** — a security-guard operation is field/mobile-first,
-      not office-dashboard-first, so the OpenConstructionERP fork's
-      dashboard-shaped assumptions may fit worse here than they did for Sod
-      Boys.
+- [x] Repo relationship to `dcentral-fieldops`: **git-level fork**, both
+      histories preserved (`bootstrap/fork-precedent`, merged to `main` in
+      [RedjiJB/IRONHORSE#1](https://github.com/RedjiJB/IRONHORSE/pull/1)),
+      then pruned — all `src/domain/*.ts` (landscaping business logic), their
+      facade routes/MCP tools/migrations/tests, and Sod-Boys operational
+      files (`.claude/`, demo files, `ops/`, `docker-compose.yml`) removed.
+- [x] Identity/capability stack: same D-Central stack as-is (`did:web`,
+      hand-rolled JWT-VCs, capability tiers) — not re-litigated, per
+      `PRECEDENT-ARCHITECTURE.md` §2's own hard-won lesson.
+- [x] Base project shape stood up: `src/identity/`, `src/db/migrations/`
+      (identity-only, 0001-0005), `src/mcp/tools/` (identity tool + shared
+      helpers), `src/facade/` (skeleton, no domain routes yet),
+      `policy/sovereignty_tiers.yaml`. `src/domain/` is currently empty —
+      IRONHORSE's own modules land starting Phase 1.
+- [x] Frontend approach: **vendored OpenConstructionERP fork** kept
+      (`vendor/openconstructionerp` submodule), AGPL-3.0 obligation
+      explicitly accepted for IRONHORSE (not assumed from the precedent's
+      acceptance). Still open before real UI work: the submodule points at
+      the `sod-boys-fork` branch and needs its own IRONHORSE-specific
+      fork/rebrand.
+- [x] Verified: `npm install`, `npm run build`, `npm run migrate` (against a
+      throwaway local Postgres), and `npm test` (15/15 identity-layer tests)
+      all pass on the pruned tree.
 
 ## Phase 1 — Ops MVP
 
@@ -67,12 +65,15 @@ clone.
 
 - [ ] Incident reporting (`incidents.ts`, per `DOMAIN-DESIGN.md` §2)
 - [ ] Contact-supervisor button, remote incident escalation
-- [ ] Duress/panic button — **blocked on resolving the open questions in
-      `DOMAIN-DESIGN.md` §3** before implementation starts
-- [ ] Patrols/checkpoints — **blocked on resolving the open question in
-      `DOMAIN-DESIGN.md` §1** (pre-scheduled vs. ad hoc)
-- [ ] Certification gating — **blocked on resolving the open questions in
-      `DOMAIN-DESIGN.md` §5**
+- [ ] Duress/panic button — design resolved (`DOMAIN-DESIGN.md` §3:
+      hardware trigger, location-only payload, subtle UI feedback, pages
+      every supervisor on-site); the hardware-trigger requirement means this
+      needs the guard app's native shell in place before it can ship, not
+      just backend work
+- [ ] Patrols/checkpoints — design resolved (`DOMAIN-DESIGN.md` §1:
+      `patrol_runs.shift_id` required)
+- [ ] Certification gating — design resolved (`DOMAIN-DESIGN.md` §5:
+      per-post required certs, soft flag on assignment)
 - [ ] Weapon/equipment issue log (direct reuse of `checkouts.ts`'s
       structurally-impossible-double-checkout pattern)
 - [ ] Shift handoff notes
@@ -112,16 +113,20 @@ and its own phase — never silently folded into the Phase 4 camera work.
 
 ## What blocks what — quick reference
 
-| Blocked item | Blocked on |
-|---|---|
-| Duress/panic button implementation | Resolving trigger UX + payload questions in `DOMAIN-DESIGN.md` §3 |
-| Patrols/checkpoints implementation | Resolving pre-scheduled-vs-ad-hoc question in `DOMAIN-DESIGN.md` §1 |
-| Certification gating | Resolving rule-model questions in `DOMAIN-DESIGN.md` §5 |
-| Camera module going to production | A real, dated `sovereignty_tiers.yaml` entry per vendor adapter |
-| Any code at all | Phase 0's repo/frontend/identity-stack decisions |
+All three design-question blockers below were resolved 2026-09-04 (see
+`PROJECT-BRIEF.md` §3 and `DOMAIN-DESIGN.md`) — implementation may proceed.
+One real blocker remains open.
 
-Resolve the left column with the user before starting the corresponding
-right-hand work — don't guess and build ahead of an unresolved design
-question, per the same discipline `PRECEDENT-ARCHITECTURE.md` documents
-throughout (every real gap in that system was named explicitly rather than
-silently papered over).
+| Item | Status |
+|---|---|
+| Duress/panic button implementation | Design resolved — still needs the guard app's native shell for the hardware trigger |
+| Patrols/checkpoints implementation | Design resolved |
+| Certification gating | Design resolved |
+| Camera module going to production | **Still blocked** — needs a real, dated `sovereignty_tiers.yaml` entry per vendor adapter |
+| Any code at all | Phase 0 done — unblocked |
+
+Don't guess and build ahead of an unresolved design question, per the same
+discipline `PRECEDENT-ARCHITECTURE.md` documents throughout (every real gap
+in that system was named explicitly rather than silently papered over) — the
+camera module's sovereignty-tier decision is the one item left that still
+needs this treatment before it ships.

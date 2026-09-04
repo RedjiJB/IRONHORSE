@@ -59,23 +59,28 @@ reasoning behind each row):
 
 ## 3. Open questions / gaps to resolve
 
-These were referenced in the planning conversation but their full detail isn't
-in the available transcript. Each is also flagged inline in
-[`DOMAIN-DESIGN.md`](DOMAIN-DESIGN.md) at the point it blocks a concrete design
-decision — resolve with the user before designing further around any of them:
+All four items below are now resolved. Each resolution's full reasoning lives
+in [`DOMAIN-DESIGN.md`](DOMAIN-DESIGN.md) at the point it drives a concrete
+design decision.
 
-1. **Panic/duress button** — trigger UX (how does a guard silently activate
-   it?), exact payload sent, who besides the supervisor gets alerted.
-2. **Patrol/checkpoint module** — the actual checkpoint data model, route
-   definition, and exception-reporting flow; specifically whether a patrol
-   run must be tied to a scheduled shift or can start ad hoc.
-3. **Certification-gating** — which certs gate which site/post types, how a
-   "required site cert" is defined and attached to a site, and whether a
-   missing cert is a hard block or a soft flag.
-4. ~~**Repo relationship to dcentral-fieldops**~~ — **resolved**: fresh, empty
-   repo named `IRONHORSE`, no code yet. Still open: how much of the identity/
-   capability stack and frontend approach gets inherited vs. rebuilt — see
-   [`ROADMAP.md`](ROADMAP.md) Phase 0.
+1. ~~**Panic/duress button**~~ — **resolved (2026-09-04)**: dedicated
+   hardware trigger (phone power-button pattern or paired fob), location +
+   timestamp only payload, subtle/deniable UI feedback, pages every
+   supervisor overseeing the site. See `DOMAIN-DESIGN.md` §3.
+2. ~~**Patrol/checkpoint module**~~ — **resolved (2026-09-04)**: a
+   `patrol_run` requires a `shift_id` — a guard can only start a patrol
+   while clocked into a shift at that site. See `DOMAIN-DESIGN.md` §1.
+3. ~~**Certification-gating**~~ — **resolved (2026-09-04)**: required certs
+   attach per-post (not site-wide), and a missing cert is a soft flag
+   surfaced to the supervisor, not a hard block on the assignment. See
+   `DOMAIN-DESIGN.md` §5.
+4. ~~**Repo relationship to dcentral-fieldops**~~ — **resolved**: git-level
+   fork of `dcentral-fieldops` (`bootstrap/fork-precedent`, merged to `main`
+   in [RedjiJB/IRONHORSE#1](https://github.com/RedjiJB/IRONHORSE/pull/1)),
+   preserving both histories, then pruned to the identity/capability layer +
+   MCP/façade scaffold — all Sod-Boys domain modules removed. Same
+   did:web/JWT-VC identity stack kept as-is; vendored OpenConstructionERP
+   frontend kept (AGPL-3.0 accepted). See [`ROADMAP.md`](ROADMAP.md) Phase 0.
 
 ## 4. What's already been done with this brief
 
