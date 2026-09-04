@@ -147,13 +147,11 @@
   .act h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(1.7rem, 3.4vw, 2.3rem); margin: 4px 0 10px; text-wrap: balance; }
   .act .dek { color: var(--ink-soft); max-width: 60ch; margin: 0 0 36px; font-size: 1.02rem; }
 
-  .beats { display: flex; flex-direction: column; gap: 18px; margin-bottom: 40px; }
-  .beat { display: grid; grid-template-columns: 110px 1fr; gap: 18px; align-items: start; }
-  @media (max-width: 560px) { .beat { grid-template-columns: 1fr; gap: 4px; } }
-  .beat .time { font-family: var(--font-mono); font-size: 0.82rem; color: var(--ink-soft); padding-top: 3px; }
-  .beat .say { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow); }
-  .beat .say strong { display: block; margin-bottom: 4px; font-size: 0.95rem; }
-  .beat .say p { margin: 0; color: var(--ink-soft); font-size: 0.94rem; }
+  .notes { display: flex; flex-direction: column; gap: 14px; margin-bottom: 40px; }
+  .note { display: flex; gap: 14px; align-items: flex-start; background: var(--accent-soft); border-radius: var(--radius); padding: 14px 18px; }
+  .note .mark { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); padding-top: 2px; flex-shrink: 0; }
+  .note strong { display: block; margin-bottom: 4px; font-size: 0.95rem; }
+  .note p { margin: 0; color: var(--ink-soft); font-size: 0.94rem; }
 
   /* ---------- browser chrome mock ---------- */
   .browser {
@@ -211,7 +209,7 @@
   .close h2 { font-family: var(--font-display); font-weight: 500; font-size: clamp(1.8rem, 4vw, 2.6rem); max-width: 20ch; margin: 0 auto 16px; text-wrap: balance; }
   .close p { color: var(--ink-soft); max-width: 44ch; margin: 0 auto 30px; }
   .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-  .btn { font-family: var(--font-body); font-weight: 600; font-size: 0.92rem; padding: 12px 22px; border-radius: 999px; border: 1px solid var(--hairline); cursor: pointer; }
+  .btn { display: inline-block; font-family: var(--font-body); font-weight: 600; font-size: 0.92rem; padding: 12px 22px; border-radius: 999px; border: 1px solid var(--hairline); cursor: pointer; text-decoration: none; }
   .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
   .btn.ghost { background: transparent; color: var(--ink); }
 
@@ -228,8 +226,8 @@
     <h1>One crew.<br>One text thread.<br><em>One system of record.</em></h1>
     <p class="lede">Everything on this page is real — a working field-operations platform for a landscaping company in Ottawa, not a mockup. A crew member never opens an app. They text. The office never re-keys anything. It's already there.</p>
     <div class="facts">
-      <div class="fact"><span class="n">3</span><span class="l">active job sites</span></div>
-      <div class="fact"><span class="n">3</span><span class="l">crew, one foreman</span></div>
+      <div class="fact"><span class="n">4</span><span class="l">active job sites</span></div>
+      <div class="fact"><span class="n">12</span><span class="l">crew, one foreman</span></div>
       <div class="fact"><span class="n">0</span><span class="l">apps the crew installs</span></div>
     </div>
   </section>
@@ -251,8 +249,8 @@
           <div class="bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="url">dashboard.sodboysltd.org</div></div>
           <div class="screen">
             <div class="site-cards">
-              <div class="site-card"><div class="name">142 Riverside Residence</div><div class="addr">142 Riverside Dr, Ottawa</div><div class="crew">● Jake, Mia on site</div></div>
-              <div class="site-card"><div class="name">88 Elmwood Crescent</div><div class="addr">88 Elmwood Cres, Ottawa</div><div class="crew">● Tyler on site</div></div>
+              <div class="site-card"><div class="name">142 Riverside Residence</div><div class="addr">142 Riverside Dr, Ottawa</div><div class="crew">● Carlos, Maria on site</div></div>
+              <div class="site-card"><div class="name">88 Elmwood Crescent</div><div class="addr">88 Elmwood Cres, Ottawa</div><div class="crew">● Luis on site</div></div>
               <div class="site-card"><div class="name">Bank St. Commercial Plaza</div><div class="addr">2210 Bank St, Ottawa</div><div class="crew" style="color:var(--earth)">◐ 1 open alert</div></div>
             </div>
             <div class="alert-row">
@@ -268,8 +266,8 @@
           </div>
         </div>
 
-        <div class="beats">
-          <div class="beat"><div class="time">Say</div><div class="say"><p>"Nothing here was typed in by a person watching a clock. The idle-vehicle alert came from the truck's own telemetry. The maintenance alert came from a service interval the system is tracking on its own."</p></div></div>
+        <div class="notes">
+          <div class="note"><span class="mark">Why it matters</span><p>Nothing here was typed in by a person watching a clock. The idle-vehicle alert came from the truck's own telemetry. The maintenance alert came from a service interval the system is tracking on its own.</p></div>
         </div>
       </section>
 
@@ -286,9 +284,10 @@
               <tbody>
                 <tr><td class="mono">+1613 581 3385</td><td>Nick</td><td>Owner</td><td><span class="pill active">Active</span></td></tr>
                 <tr><td class="mono">+1647 802 1787</td><td>Vicki</td><td>Management</td><td><span class="pill active">Active</span></td></tr>
-                <tr><td class="mono">JT-01</td><td>Jake Tremblay</td><td>Foreman</td><td><span class="pill active">Active</span></td></tr>
-                <tr><td class="mono">MC-02</td><td>Mia Chen</td><td>Crew</td><td><span class="pill active">Active</span></td></tr>
-                <tr><td class="mono">TB-03</td><td>Tyler Brooks</td><td>Crew</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">CR-01</td><td>Carlos Rodriguez</td><td>Foreman</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">MS-02</td><td>Maria Santos</td><td>Crew</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">LM-03</td><td>Luis Morales</td><td>Crew</td><td><span class="pill active">Active</span></td></tr>
+                <tr><td class="mono">+9 more</td><td>Full crew of 12</td><td>—</td><td><span class="pill draft">See dashboard</span></td></tr>
               </tbody>
             </table>
           </div>
@@ -308,8 +307,8 @@
           </div>
         </div>
 
-        <div class="beats">
-          <div class="beat"><div class="time">Say</div><div class="say"><p>"This is the same crew roster the WhatsApp bot resolves a phone number against. One table. Not a CRM the field forgets to update."</p></div></div>
+        <div class="notes">
+          <div class="note"><span class="mark">Why it matters</span><p>This is the same crew roster the WhatsApp bot resolves a phone number against. One table. Not a CRM the field forgets to update.</p></div>
         </div>
       </section>
 
@@ -322,8 +321,8 @@
           <div class="phone">
             <div class="head"><div class="avatar">SB</div><div><div class="who">Sod Boys Dispatch</div><div class="num">+1 343 204 0439</div></div></div>
             <div class="thread">
-              <div class="bubble out">clocking in at riverside<span class="meta">Jake · 8:03 AM</span></div>
-              <div class="bubble in">Got it, Jake — logged in at 142 Riverside Residence, 8:03 AM. Mia's already there too.<span class="meta">Bot</span></div>
+              <div class="bubble out">clocking in at riverside<span class="meta">Carlos · 8:03 AM</span></div>
+              <div class="bubble in">Got it, Carlos — logged in at 142 Riverside Residence, 8:03 AM. Maria's already there too.<span class="meta">Bot</span></div>
               <div class="bubble out">whats the weather like there today<span class="meta">8:04 AM</span></div>
               <div class="bubble in">Riverside: 22°C, light cloud, 11mm rain expected — should hold off till afternoon. Good window for sod.<span class="meta">Bot</span></div>
               <div class="bubble out">grabbed trimmer line at the hardware store, $42 [photo]<span class="meta">11:40 AM</span></div>
@@ -332,9 +331,9 @@
           </div>
         </div>
 
-        <div class="beats">
-          <div class="beat"><div class="time">Say</div><div class="say"><strong>Money never moves on a text alone.</strong><p>That $42 receipt didn't hit the books — it queued as a pending confirmation. Flip back to Notifications and it's sitting there, waiting on the office.</p></div></div>
-          <div class="beat"><div class="time">Then</div><div class="say"><strong>Same thread, whole day.</strong><p>Overtime requests, low-stock flags, equipment problems, clock-out — all of it lands as a real, timestamped record. No phone call the office might miss.</p></div></div>
+        <div class="notes">
+          <div class="note"><span class="mark">Why it matters</span><div><strong>Money never moves on a text alone.</strong><p>That $42 receipt didn't hit the books — it queued as a pending confirmation. Flip back to Notifications and it's sitting there, waiting on the office.</p></div></div>
+          <div class="note"><span class="mark">Also true</span><div><strong>Same thread, whole day.</strong><p>Overtime requests, low-stock flags, equipment problems, clock-out — all of it lands as a real, timestamped record. No phone call the office might miss.</p></div></div>
         </div>
       </section>
 
@@ -345,8 +344,8 @@
     <h2>Two windows. One truth.</h2>
     <p>The phone and the office aren't two systems that sync — they're two views of the same database. Ask us to walk through your own crew's day.</p>
     <div class="cta-row">
-      <button class="btn primary" type="button" onclick="sendPrompt('Tell me more about scheduling a live demo of Sod Boys FieldOps')">Book a live walkthrough</button>
-      <button class="btn ghost" type="button" onclick="sendPrompt('What does it take to set up FieldOps for a new crew?')">How setup works</button>
+      <a class="btn primary" href="tel:+13432040439">Book a live walkthrough — call +1 343 204 0439</a>
+      <a class="btn ghost" href="tel:+13432040439">Ask how setup works</a>
     </div>
   </section>
 
