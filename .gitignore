@@ -1,0 +1,29 @@
+# Secrets
+.env
+*.pem
+*.key
+
+# Node
+node_modules/
+npm-debug.log*
+dist/
+
+# Veramo local key store (dev only -- never commit real key material)
+veramo.sqlite
+*.sqlite
+*.sqlite-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# didwebvh-ts writes DID-log artifacts here during test runs
+test/logs/
+
+# Uploaded documents (local filesystem storage, see src/domain/documents.ts)
+uploads/
+
+# Runtime artifacts from ops/retry-openclaw-provision.ps1
+ops/openclaw-provision.log
+ops/openclaw-provision.done
+ops/shape-config.json

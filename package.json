@@ -1,0 +1,37 @@
+{
+  "name": "ironhorse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Security-guard operations platform -- forked from dcentral-fieldops's identity/capability layer (did:web/JWT-VC, no Veramo, capability-tiered authorization) and MCP/façade scaffold. Domain modules (sites, guards, shifts, patrols, incidents, cameras) are IRONHORSE's own -- see docs/ROADMAP.md.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "migrate": "tsx src/db/migrate.ts",
+    "sync:policy": "tsx src/identity/syncSovereigntyPolicy.ts",
+    "bootstrap:node": "tsx src/identity/bootstrapNode.ts",
+    "bootstrap:openclaw-agent": "tsx src/identity/bootstrapOpenClawAgent.ts",
+    "bootstrap:ops-infra-agent": "tsx src/identity/bootstrapOpsInfraAgent.ts",
+    "mcp:stdio": "tsx src/mcp/transports/stdio.ts",
+    "mcp:http": "tsx src/mcp/transports/http.ts",
+    "facade:http": "tsx watch src/facade/server.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "dotenv": "^16.4.5",
+    "jose": "^6.2.9",
+    "pg": "^8.12.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^22.5.0",
+    "@types/pg": "^8.11.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.0"
+  }
+}
