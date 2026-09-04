@@ -1,0 +1,4 @@
+[submodule "vendor/openconstructionerp"]
+	path = vendor/openconstructionerp
+	url = https://github.com/RedjiJB/OpenConstructionERP.git
+	branch = sod-boys-fork

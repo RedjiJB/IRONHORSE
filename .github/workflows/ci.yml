@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dcentral
+          POSTGRES_PASSWORD: ci-only-throwaway-password
+          POSTGRES_DB: dcentral_fieldops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://dcentral:ci-only-throwaway-password@localhost:5432/dcentral_fieldops
+      NODE_DID_DOMAIN: id.sodboysltd.org
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run build
+
+      - name: Run migrations
+        run: npm run migrate
+
+      - name: Sync sovereignty policy
+        run: npm run sync:policy
+
+      - name: Test
+        run: npx vitest run test/
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: vendor/openconstructionerp/frontend/package-lock.json
+
+      - working-directory: vendor/openconstructionerp/frontend
+        run: npm ci
+
+      - name: Build (tsc -b, catches noUnusedLocals-class errors --noEmit misses)
+        working-directory: vendor/openconstructionerp/frontend
+        run: npm run build
+
+      - name: Test
+        working-directory: vendor/openconstructionerp/frontend
+        run: npx vitest run
