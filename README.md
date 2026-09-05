@@ -2,10 +2,13 @@
 
 Security-guard operations platform (client sites, guard shifts, patrols,
 incidents, supervisors, optional camera integration). **Phase 0 (repo
-bootstrap) is done** — see [`docs/ROADMAP.md`](docs/ROADMAP.md). The identity/
-capability layer and MCP/façade scaffold are in place and verified (build +
-tests pass); `src/domain/` is still empty — IRONHORSE's own domain modules
-(sites, guards, shifts, patrols, incidents, cameras) are Phase 1/2 work.
+bootstrap) and Phase 1 (Ops MVP) are both done** — see
+[`docs/ROADMAP.md`](docs/ROADMAP.md). Sites, guards, shifts,
+confirm-before-execute timeclock, the supervisor live-roster/approve-reject
+UI, push-to-guard messaging/broadcast, and compliance-dashboard basics are
+all live on `main`, each verified end-to-end against a real Postgres before
+merging. Next up is Phase 2 (patrols, incidents, duress, cert-gating
+enforcement) — see `docs/ROADMAP.md`'s blocker table.
 
 **Architectural precedent**: forked at the git level from `dcentral-fieldops`
 (the Sod Boys Ltd field-operations system,

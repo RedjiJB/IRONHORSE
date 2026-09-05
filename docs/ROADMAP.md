@@ -38,25 +38,49 @@ order with the user, especially anywhere a **[gap]** item from
       throwaway local Postgres), and `npm test` (15/15 identity-layer tests)
       all pass on the pruned tree.
 
-## Phase 1 — Ops MVP
+## Phase 1 — Ops MVP (done, 2026-09-05)
 
 The minimum real system: sites, guards, shifts, and the supervisor's ability
 to see and approve what's happening. No security-specific features yet.
 
-- [ ] Core domain: sites, guard/crew profiles, shifts/assignments (direct
-      reuse of the precedent's `sites.ts`/`crewMembers.ts`/`shifts.ts`
-      patterns — see `PRECEDENT-ARCHITECTURE.md` §6)
-- [ ] Guard app: shift start/end with GPS check-in/check-out + geofence
-      verification (direct reuse of `resolveGeofenceVerified` +
-      confirm-before-execute timeclock flow)
-- [ ] Supervisor app: live roster view, approve/reject queue (both are
-      near-zero-new-backend per `FEATURES.md` §3 — this is the highest
-      leverage phase-1 work)
-- [ ] Push-to-guard messaging/broadcast (reuses `chat.ts`/`notifications.ts`
-      routing)
-- [ ] Compliance dashboard basics: expiring-soon alerts for licences/certs
-      (no gating logic yet — that's Phase 2, blocked on the `[gap]` in
-      `DOMAIN-DESIGN.md` §5)
+- [x] Core domain: `sites.ts`, `guards.ts`, `shifts.ts`, `confirmations.ts`,
+      `timeclock.ts` — adapted (not copied) from the precedent's
+      `sites.ts`/`crewMembers.ts`/`shifts.ts` patterns per
+      `PRECEDENT-ARCHITECTURE.md` §6, plus migrations 0006-0010
+      ([RedjiJB/IRONHORSE#2](https://github.com/RedjiJB/IRONHORSE/pull/2)).
+      Guards get a real `did:web` identity from registration onward (not a
+      later-migration backfill, since IRONHORSE inherited the full identity
+      stack in Phase 0).
+- [x] Guard shift check-in/out: `resolveGeofenceVerified` +
+      confirm-before-execute timeclock flow, same as the precedent —
+      verified end-to-end (submit → supervisor approval → geofence
+      re-verified fresh at approval time), part of PR #2 above.
+- [x] Supervisor live-roster view + approve/reject queue, exposed over the
+      REST façade with a minimal purpose-built HTML/JS page (not yet the
+      vendored OpenConstructionERP frontend — that integration is still
+      separate, unstarted work)
+      ([RedjiJB/IRONHORSE#3](https://github.com/RedjiJB/IRONHORSE/pull/3)).
+      Found and fixed a real bug here: the confirmation-executor registry
+      is in-memory per process, so the façade server needs its own
+      executor registration independent of the MCP server's.
+- [x] Push-to-guard messaging/broadcast: a new `messages.ts` module (not
+      adapted from the precedent — neither `notifications.ts` nor the
+      read-only `chat.ts` model person-to-person messaging), one row per
+      recipient for independent read state, broadcast scoped to guards
+      actually on duty at a site right now
+      ([RedjiJB/IRONHORSE#4](https://github.com/RedjiJB/IRONHORSE/pull/4)).
+- [x] Compliance dashboard basics: `guard_certifications` +
+      expiring-soon/expired queries, visibility only — no gating logic yet.
+      DOMAIN-DESIGN.md §5's resolved cert-gating design (per-post required
+      certs) needs a posts concept this domain doesn't have, so enforcement
+      is Phase 2 scope once patrols/posts land
+      ([RedjiJB/IRONHORSE#5](https://github.com/RedjiJB/IRONHORSE/pull/5)).
+
+Every PR above was verified end-to-end against a live Postgres (not just
+`npm run build`/`npm test`) before merging — real data through the actual
+submit/approve/broadcast/compliance flows, matching
+`PRECEDENT-ARCHITECTURE.md` §7's discipline of never leaving a built
+surface calling something unverified.
 
 ## Phase 2 — Security-specific
 
