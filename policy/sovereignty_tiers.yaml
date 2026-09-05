@@ -142,3 +142,72 @@ functions:
       completeness rather than left looking undecided.
     reviewed_by: "Redji (analysis by Claude Sonnet 5)"
     reviewed_at: "2026-08-21"
+
+  - id: camera_events_onvif
+    description: >
+      cameras.ts's generic-onvif and hikvision vendor adapters: ONVIF event
+      subscription (motion/line-crossing/loitering) and on-demand snapshot
+      pull, queried directly against a camera or NVR/VMS on the client's own
+      network. See docs/DOMAIN-DESIGN.md #4.
+    status: self_hosted_required
+    rationale: >
+      ONVIF is a device-to-device protocol -- this adapter calls an IP
+      camera or NVR/VMS sitting on the client's own local network directly,
+      the same way this node queries its own database. No third party sits
+      in the path at all, so there is nothing to "accept" as an external
+      dependency -- the constraint follows from what the protocol *is*,
+      same reasoning as federation_transport above. If a future
+      generic-onvif deployment ever proxies through a cloud NVR product
+      instead of an on-prem one, that specific deployment needs its own
+      reviewed entry -- this status assumes the on-prem case the module was
+      designed for (docs/DOMAIN-DESIGN.md #4's "self_hosted_required when
+      pulling from an on-prem NVR/VMS the client already owns").
+    reviewed_by: "Redji (analysis by Claude Sonnet 5)"
+    reviewed_at: "2026-09-04"
+
+  - id: camera_events_avigilon_acc_onprem
+    description: >
+      cameras.ts's avigilon vendor adapter, specifically against a
+      client-owned, on-prem Avigilon Control Center (ACC) server -- the
+      common Avigilon deployment shape. Motion/analytics events and
+      snapshot pulls via ACC's local API.
+    status: self_hosted_required
+    rationale: >
+      Same reasoning as camera_events_onvif: this is a query against
+      hardware the client owns on their own network, not a call to
+      Avigilon's own infrastructure. Distinguished from the entry below
+      specifically because Avigilon also ships a genuinely cloud-hosted
+      product (Avigilon Alta / Avigilon Cloud) that a site could be running
+      instead of on-prem ACC -- the vendor name alone doesn't determine the
+      tier, the deployment topology does. An integrator wiring up a specific
+      client site must confirm which Avigilon product that site actually
+      runs before assuming this entry (rather than the one below) applies.
+    reviewed_by: "Redji (analysis by Claude Sonnet 5)"
+    reviewed_at: "2026-09-04"
+
+  - id: camera_events_avigilon_cloud
+    description: >
+      cameras.ts's avigilon vendor adapter, when the client's site runs a
+      cloud-hosted Avigilon product (Avigilon Alta / Avigilon Cloud) rather
+      than on-prem ACC -- a genuine third-party API dependency.
+    status: external_pending
+    rationale: >
+      Genuinely undecided, not deferred out of caution: camera motion/
+      analytics events and snapshot pulls are meaningfully more sensitive
+      than a coordinate or a weather query (docs/DOMAIN-DESIGN.md #4) --
+      they can reveal who is where, on whose premises, on camera, which is
+      a different privacy posture than telemetry this system already
+      stores regardless of geocoding. No IRONHORSE client has been
+      confirmed running this product shape yet, so there's no real
+      deployment to evaluate terms/data-handling against. Must be reviewed
+      for real -- reading Avigilon Cloud's actual data-handling/retention
+      terms, not assumed acceptable by analogy to weather_forecast or
+      geocoding above -- before any client site using this product path is
+      allowed to depend on it in production.
+    open_items:
+      - Identify the first real IRONHORSE client (if any) running a cloud
+        Avigilon product rather than on-prem ACC, and review that
+        product's actual data-handling terms before this status changes
+        from external_pending.
+    reviewed_by: null
+    reviewed_at: null
