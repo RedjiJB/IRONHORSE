@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { assignShift, confirmShift, getShift, listShifts } from "../../domain/shifts.js";
+import { checkGuardPostCompliance } from "../../domain/certifications.js";
 import { requireCapability } from "../middleware.js";
 import { credentialArg, deniedResult } from "./shared.js";
 
@@ -11,7 +12,8 @@ export function registerShiftTools(server: McpServer): void {
     "assign_shift",
     {
       title: "Assign Shift",
-      description: "Assigns a guard to a shift at a site on a given date. Minimum tier: 2.",
+      description:
+        "Assigns a guard to a shift at a site on a given date, optionally tied to a post. If postId is set, also returns a soft complianceWarning (missing/expired required certs) -- never blocks the assignment (DOMAIN-DESIGN.md §5's resolved soft-flag decision). Minimum tier: 2.",
       inputSchema: z.object({
         ...credentialArg,
         guardId: z.string().uuid(),
@@ -19,13 +21,17 @@ export function registerShiftTools(server: McpServer): void {
         date: z.string(),
         startTime: z.string().optional(),
         endTime: z.string().optional(),
+        postId: z.string().uuid().optional(),
       }),
     },
     async ({ credentialJwt, ...args }) => {
       try {
         await requireCapability(credentialJwt, "mcp:tool:assign_shift", 2);
         const shift = await assignShift(args);
-        return { content: [{ type: "text", text: JSON.stringify(shift) }] };
+        const complianceWarning = args.postId
+          ? await checkGuardPostCompliance(args.guardId, args.postId, args.date)
+          : null;
+        return { content: [{ type: "text", text: JSON.stringify({ ...shift, complianceWarning }) }] };
       } catch (err) {
         return deniedResult(err);
       }
