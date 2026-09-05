@@ -87,20 +87,44 @@ surface calling something unverified.
 The features that make this a *security* platform, not a generic field-ops
 clone.
 
-- [ ] Incident reporting (`incidents.ts`, per `DOMAIN-DESIGN.md` §2)
-- [ ] Contact-supervisor button, remote incident escalation
-- [ ] Duress/panic button — design resolved (`DOMAIN-DESIGN.md` §3:
-      hardware trigger, location-only payload, subtle UI feedback, pages
-      every supervisor on-site); the hardware-trigger requirement means this
-      needs the guard app's native shell in place before it can ship, not
-      just backend work
-- [ ] Patrols/checkpoints — design resolved (`DOMAIN-DESIGN.md` §1:
+- [x] Incident reporting (`incidents.ts`, per `DOMAIN-DESIGN.md` §2):
+      severity/status/append-only `incident_actions` log, remote escalation
+      (bump severity or reassign) included
+      ([RedjiJB/IRONHORSE#6](https://github.com/RedjiJB/IRONHORSE/pull/6)).
+      `incident_media` (photos) intentionally not built -- depends on a
+      `documents.ts` storage layer this pruned tree doesn't have yet.
+- [ ] Contact-supervisor button: no dedicated route yet -- `/messages/send`
+      is still supervisor-only (`requireSupervisor`), so a guard can't
+      directly message a supervisor through the façade today even though
+      `messages.ts`'s own module comment flags this as a direct reuse once
+      built.
+- [ ] Duress/panic button — software side shipped as part of PR #6:
+      `duress.ts`'s `triggerDuressAlert` (a `category = 'duress'`,
+      `severity = 'critical'` incident, location+timestamp-only payload,
+      paging every active supervisor/admin via `messages.ts`). Two pieces
+      of the resolved design remain open, flagged in `duress.ts`'s own
+      header, not silently dropped: the **hardware trigger** itself (needs
+      the guard app's native shell, not just backend work) and the
+      **re-page-until-acknowledged escalation timer** (currently one
+      fan-out at trigger time, not a recurring poller).
+- [x] Patrols/checkpoints — design resolved (`DOMAIN-DESIGN.md` §1:
       `patrol_runs.shift_id` required)
-- [ ] Certification gating — design resolved (`DOMAIN-DESIGN.md` §5:
+      ([RedjiJB/IRONHORSE#7](https://github.com/RedjiJB/IRONHORSE/pull/7)).
+      Missed-checkpoint alerting is a separate poller, not built yet (see
+      "known future work" below).
+- [x] Certification gating — design resolved (`DOMAIN-DESIGN.md` §5:
       per-post required certs, soft flag on assignment)
-- [ ] Weapon/equipment issue log (direct reuse of `checkouts.ts`'s
+      ([RedjiJB/IRONHORSE#8](https://github.com/RedjiJB/IRONHORSE/pull/8)).
+- [x] Weapon/equipment issue log (direct reuse of `checkouts.ts`'s
       structurally-impossible-double-checkout pattern)
-- [ ] Shift handoff notes
+      ([RedjiJB/IRONHORSE#9](https://github.com/RedjiJB/IRONHORSE/pull/9)).
+- [x] Shift handoff notes: `shift_handoff_notes` (migration 0017), a new
+      `handoffNotes.ts` module -- site-scoped (no successor/predecessor
+      pointer between shifts exists), reusing `patrols.ts`'s shift-ownership
+      check both to leave a note (must be the author's own shift) and to
+      acknowledge one (must be the acknowledger's own shift at the same
+      site). Acknowledgment is idempotent, same pattern as
+      `messages.markMessageRead`.
 - [ ] Lone-worker check-in timer
 - [ ] Site visit / spot-check logging (supervisor's own geofenced check-in)
 - [ ] Override/reassign shift on the fly (no-show handling)

@@ -25,6 +25,7 @@ import { registerPatrolRoutes } from "./routes/patrols.js";
 import { registerPostRoutes } from "./routes/posts.js";
 import { registerShiftRoutes } from "./routes/shifts.js";
 import { registerEquipmentRoutes } from "./routes/equipment.js";
+import { registerHandoffNoteRoutes } from "./routes/handoffNotes.js";
 import { registerUiRoutes } from "./routes/ui.js";
 import { registerTimeclockConfirmationExecutor } from "../domain/timeclock.js";
 import { registerEquipmentReturnExecutor } from "../domain/equipment.js";
@@ -51,6 +52,7 @@ export function buildFacadeServer(): Server {
   registerPostRoutes(router);
   registerShiftRoutes(router);
   registerEquipmentRoutes(router);
+  registerHandoffNoteRoutes(router);
   registerUiRoutes(router);
 
   return createServer((req, res) => {
