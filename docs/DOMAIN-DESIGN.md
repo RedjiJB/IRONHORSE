@@ -152,19 +152,24 @@ The most fully-specified module from the original planning conversation.
   optionally pull a snapshot at that timestamp as a secondary verification
   layer on top of GPS (ties `cameras.ts` to `checkpoints.ts` above).
 
-**Sovereignty tier — required before this ships**, following the exact
-discipline in `PRECEDENT-ARCHITECTURE.md` §4: add a `camera_events` (or
-per-vendor) entry to `policy/sovereignty_tiers.yaml` with a real, dated,
-reasoned decision. The likely split:
+**Sovereignty tier — resolved (2026-09-04)**, three real entries now in
+`policy/sovereignty_tiers.yaml`, decided per vendor adapter (not blanket) per
+`PRECEDENT-ARCHITECTURE.md` §4's discipline:
 
-- **`self_hosted_required`** when pulling from an on-prem NVR/VMS the client
-  already owns — no data leaves their network, this system only queries it.
-- **`external_pending`** (until reviewed) when any cloud VMS is in the path
-  (e.g. Avigilon Cloud).
+| Entry | Status | Why |
+|---|---|---|
+| `camera_events_onvif` (generic-onvif, hikvision) | `self_hosted_required` | Device-to-device protocol against a camera/NVR on the client's own network — no third party in the path at all |
+| `camera_events_avigilon_acc_onprem` | `self_hosted_required` | Same reasoning, for a client-owned on-prem ACC server — the common Avigilon deployment shape |
+| `camera_events_avigilon_cloud` | `external_pending` | Only when a site runs the cloud-hosted Avigilon Alta/Cloud product instead of on-prem ACC — genuinely undecided until a real client on this product path exists and its data-handling terms get reviewed |
 
-This must be decided **per vendor adapter**, not blanket — an ONVIF query
-against a client's own on-prem NVR and a call to a cloud VMS API are not the
-same tier decision even though both are "camera integration."
+**Important**: the vendor name alone doesn't determine the tier — Avigilon
+ships both an on-prem product (ACC) and a cloud one (Alta/Cloud). Whoever
+wires up a specific client site must confirm which product that site
+actually runs before assuming the on-prem entry applies. If a
+`generic-onvif` deployment is ever found proxying through a cloud NVR
+product, that specific case needs its own reviewed entry too — the current
+`self_hosted_required` status assumes the on-prem case this module was
+designed for.
 
 **Explicitly out of scope, by deliberate decision**: a full VMS replacement,
 live video streaming into the app, facial-recognition matching. If SAFR-style

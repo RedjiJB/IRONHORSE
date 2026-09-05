@@ -96,8 +96,12 @@ clone.
 ## Phase 4 — Intelligence
 
 - [ ] Camera integration module (`cameras.ts`, per `DOMAIN-DESIGN.md` §4) —
-      **requires a `policy/sovereignty_tiers.yaml` entry before it ships**,
-      decided per vendor adapter
+      sovereignty-tier entries resolved (`policy/sovereignty_tiers.yaml`:
+      `camera_events_onvif`, `camera_events_avigilon_acc_onprem` both
+      `self_hosted_required`; `camera_events_avigilon_cloud` stays
+      `external_pending` until a real client on that product path exists) —
+      module itself (table, migration, ONVIF adapter, MCP tools) is
+      unbuilt
 - [ ] Coverage-gap forecasting
 - [ ] Post risk scoring
 - [ ] Weather-aware post adjustments
@@ -113,20 +117,21 @@ and its own phase — never silently folded into the Phase 4 camera work.
 
 ## What blocks what — quick reference
 
-All three design-question blockers below were resolved 2026-09-04 (see
-`PROJECT-BRIEF.md` §3 and `DOMAIN-DESIGN.md`) — implementation may proceed.
-One real blocker remains open.
+All design-question and sovereignty-tier blockers below are resolved as of
+2026-09-04 (see `PROJECT-BRIEF.md` §3 and `DOMAIN-DESIGN.md`) —
+**implementation may proceed on everything in this table.**
 
 | Item | Status |
 |---|---|
 | Duress/panic button implementation | Design resolved — still needs the guard app's native shell for the hardware trigger |
 | Patrols/checkpoints implementation | Design resolved |
 | Certification gating | Design resolved |
-| Camera module going to production | **Still blocked** — needs a real, dated `sovereignty_tiers.yaml` entry per vendor adapter |
+| Camera module going to production (on-prem ONVIF / Avigilon ACC) | Design + sovereignty tier both resolved (`self_hosted_required`) — clear to build |
+| Camera module going to production (Avigilon Cloud/Alta path) | **Still blocked** — `external_pending` until a real client on that product path exists and its data-handling terms get reviewed; do not let a client's cloud-Avigilon deployment depend on this in production before that review happens |
 | Any code at all | Phase 0 done — unblocked |
 
 Don't guess and build ahead of an unresolved design question, per the same
 discipline `PRECEDENT-ARCHITECTURE.md` documents throughout (every real gap
 in that system was named explicitly rather than silently papered over) — the
-camera module's sovereignty-tier decision is the one item left that still
-needs this treatment before it ships.
+one item left that still needs this treatment is the cloud-Avigilon path
+specifically, not the camera module as a whole.
