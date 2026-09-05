@@ -24,8 +24,10 @@ import { registerIncidentRoutes } from "./routes/incidents.js";
 import { registerPatrolRoutes } from "./routes/patrols.js";
 import { registerPostRoutes } from "./routes/posts.js";
 import { registerShiftRoutes } from "./routes/shifts.js";
+import { registerEquipmentRoutes } from "./routes/equipment.js";
 import { registerUiRoutes } from "./routes/ui.js";
 import { registerTimeclockConfirmationExecutor } from "../domain/timeclock.js";
+import { registerEquipmentReturnExecutor } from "../domain/equipment.js";
 
 export function buildFacadeServer(): Server {
   // The confirmation-executor registry (src/domain/confirmations.ts) is
@@ -36,6 +38,7 @@ export function buildFacadeServer(): Server {
   // through the façade fails with no_executor_registered even though the
   // pending_confirmations row and the DB are perfectly fine.
   registerTimeclockConfirmationExecutor();
+  registerEquipmentReturnExecutor();
 
   const router = new Router();
   registerAuthRoutes(router);
@@ -47,6 +50,7 @@ export function buildFacadeServer(): Server {
   registerPatrolRoutes(router);
   registerPostRoutes(router);
   registerShiftRoutes(router);
+  registerEquipmentRoutes(router);
   registerUiRoutes(router);
 
   return createServer((req, res) => {
