@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
-import { assignShift, confirmShift, getShift, listShifts } from "../../domain/shifts.js";
+import { assignShift, confirmShift, getShift, listShifts, reassignShift } from "../../domain/shifts.js";
 import { checkGuardPostCompliance } from "../../domain/certifications.js";
 import { requireCapability } from "../middleware.js";
 import { credentialArg, deniedResult } from "./shared.js";
 
-const shiftStatusSchema = z.enum(["assigned", "confirmed", "declined", "no_show"]);
+const shiftStatusSchema = z.enum(["assigned", "confirmed", "declined", "no_show", "reassigned"]);
 
 export function registerShiftTools(server: McpServer): void {
   server.registerTool(
@@ -55,6 +55,34 @@ export function registerShiftTools(server: McpServer): void {
         const shift = await confirmShift(shiftId, decision);
         if (!shift) return { content: [{ type: "text", text: "Not found" }], isError: true };
         return { content: [{ type: "text", text: JSON.stringify(shift) }] };
+      } catch (err) {
+        return deniedResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "reassign_shift",
+    {
+      title: "Reassign Shift",
+      description:
+        "Overrides/reassigns a shift on the fly: marks the outgoing shift no_show or reassigned and creates a fresh shift for the replacement guard at the same site/date/time/post, linked back for an audit trail. If the shift has a postId, also returns a soft complianceWarning for the new guard -- never blocks (DOMAIN-DESIGN.md §5). Minimum tier: 2.",
+      inputSchema: z.object({
+        ...credentialArg,
+        shiftId: z.string().uuid(),
+        newGuardId: z.string().uuid(),
+        outgoingStatus: z.enum(["no_show", "reassigned"]),
+      }),
+    },
+    async ({ credentialJwt, ...args }) => {
+      try {
+        await requireCapability(credentialJwt, "mcp:tool:reassign_shift", 2);
+        const result = await reassignShift(args);
+        if (!result.ok) return { content: [{ type: "text", text: `Failed: ${result.reason}` }], isError: true };
+        const complianceWarning = result.newShift.post_id
+          ? await checkGuardPostCompliance(args.newGuardId, result.newShift.post_id, result.newShift.date)
+          : null;
+        return { content: [{ type: "text", text: JSON.stringify({ oldShift: result.oldShift, newShift: result.newShift, complianceWarning }) }] };
       } catch (err) {
         return deniedResult(err);
       }
