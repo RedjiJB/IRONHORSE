@@ -10,21 +10,29 @@ export type Shift = {
   start_time: string | null;
   end_time: string | null;
   status: ShiftStatus;
+  post_id: string | null;
   created_at: string;
 };
 
+// postId is optional -- a shift not tied to a post works exactly as it
+// did before posts existed (DOMAIN-DESIGN.md §5). When it is set, the
+// caller (the MCP tool/façade route) is expected to also check
+// certifications.ts's checkGuardPostCompliance and surface any gap as a
+// warning -- this function itself never blocks on it, per the resolved
+// soft-flag decision.
 export async function assignShift(args: {
   guardId: string;
   siteId: string;
   date: string;
   startTime?: string;
   endTime?: string;
+  postId?: string;
 }): Promise<Shift> {
   const result = await pool.query(
-    `INSERT INTO shifts (guard_id, site_id, date, start_time, end_time)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO shifts (guard_id, site_id, date, start_time, end_time, post_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [args.guardId, args.siteId, args.date, args.startTime ?? null, args.endTime ?? null],
+    [args.guardId, args.siteId, args.date, args.startTime ?? null, args.endTime ?? null, args.postId ?? null],
   );
   return result.rows[0] as Shift;
 }

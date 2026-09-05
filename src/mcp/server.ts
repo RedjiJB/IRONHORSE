@@ -9,6 +9,7 @@ import { registerMessageTools } from "./tools/messages.js";
 import { registerCertificationTools } from "./tools/certifications.js";
 import { registerIncidentTools } from "./tools/incidents.js";
 import { registerPatrolTools } from "./tools/patrols.js";
+import { registerPostTools } from "./tools/posts.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "ironhorse", version: "0.1.0" });
@@ -22,6 +23,7 @@ export function buildMcpServer(): McpServer {
   registerCertificationTools(server);
   registerIncidentTools(server);
   registerPatrolTools(server);
+  registerPostTools(server);
   return server;
 }
 
