@@ -21,16 +21,14 @@ export async function requireBearerToken(req: IncomingMessage): Promise<Authenti
   return { userId: result.userId, userDid: result.userDid, role: result.role };
 }
 
-export async function requireStaffRole(req: IncomingMessage): Promise<AuthenticatedUser> {
+// Same capability guards.ts's hasSupervisorCapability checks -- kept as a
+// separate façade-side check (rather than importing that domain function
+// directly) so this file's authorization logic stays readable without
+// chasing into src/domain/. Re-checked live every request, never a
+// trusted role column or the access token's own role claim.
+export async function requireSupervisor(req: IncomingMessage): Promise<AuthenticatedUser> {
   const user = await requireBearerToken(req);
-  const check = await checkStandingCapability(user.userDid, "dashboard:role:staff", 1);
-  if (!check.allowed) throw new FacadeError(403, "Not authorized");
-  return user;
-}
-
-export async function requireAdminRole(req: IncomingMessage): Promise<AuthenticatedUser> {
-  const user = await requireBearerToken(req);
-  const check = await checkStandingCapability(user.userDid, "dashboard:role:admin", 1);
+  const check = await checkStandingCapability(user.userDid, "guard:role:management", 1);
   if (!check.allowed) throw new FacadeError(403, "Not authorized");
   return user;
 }

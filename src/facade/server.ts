@@ -6,17 +6,36 @@
 // enforces real authorization itself (src/facade/auth.ts) and has no
 // need to round-trip through MCP for its own process's domain calls.
 //
-// No domain routes exist yet -- IRONHORSE's own domain modules
-// (patrols, checkpoints, incidents, cameras) land in Phase 1/2 per
-// docs/ROADMAP.md, each registering its own routes/*.ts here then.
+// Phase 1 routes: dev login, supervisor live-roster, approve/reject queue.
+// IRONHORSE's later domain modules (patrols, checkpoints, incidents,
+// cameras) land in Phase 2 per docs/ROADMAP.md, each registering its own
+// routes/*.ts here then.
 import "dotenv/config";
 import { createServer, type Server } from "node:http";
 import { pathToFileURL } from "node:url";
 import { Router } from "./router.js";
 import { sendJson } from "./context.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerGuardRoutes } from "./routes/guards.js";
+import { registerConfirmationRoutes } from "./routes/confirmations.js";
+import { registerUiRoutes } from "./routes/ui.js";
+import { registerTimeclockConfirmationExecutor } from "../domain/timeclock.js";
 
 export function buildFacadeServer(): Server {
+  // The confirmation-executor registry (src/domain/confirmations.ts) is
+  // in-memory per process -- the MCP server registers this same executor
+  // independently (src/mcp/tools/timeclock.ts) because it's a separate
+  // process with its own empty registry, not shared state. Every
+  // confirmable action's executor needs registering here too, or approval
+  // through the façade fails with no_executor_registered even though the
+  // pending_confirmations row and the DB are perfectly fine.
+  registerTimeclockConfirmationExecutor();
+
   const router = new Router();
+  registerAuthRoutes(router);
+  registerGuardRoutes(router);
+  registerConfirmationRoutes(router);
+  registerUiRoutes(router);
 
   return createServer((req, res) => {
     router.dispatch(req, res).then((handled) => {
