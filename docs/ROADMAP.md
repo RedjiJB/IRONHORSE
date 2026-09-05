@@ -125,7 +125,19 @@ clone.
       acknowledge one (must be the acknowledger's own shift at the same
       site). Acknowledgment is idempotent, same pattern as
       `messages.markMessageRead`.
-- [ ] Lone-worker check-in timer
+- [x] Lone-worker check-in timer: `lone_worker_checkins` (migration 0018),
+      a new `loneWorker.ts` module -- a guard checks in against their own
+      shift with an interval of their own choosing (site conditions vary,
+      so no system-wide constant), which sets when the next one is due.
+      "Overdue" is a read-only query (`listOverdueLoneWorkers`, surfaced to
+      supervisors only), not an active alerting poller -- same
+      simplification already flagged for `duress.ts`'s re-page escalation
+      and `equipment.ts`'s overdue-checkout visibility. A guard who never
+      checks in at all isn't flagged by this query (it only catches
+      shifts that checked in once and then went quiet); building the real
+      poller is the same category of follow-up work as patrols'
+      missed-checkpoint alerting and the duress re-page escalation timer,
+      not scoped into this first cut.
 - [ ] Site visit / spot-check logging (supervisor's own geofenced check-in)
 - [ ] Override/reassign shift on the fly (no-show handling)
 - [ ] Multi-language incident input
