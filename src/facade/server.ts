@@ -21,6 +21,7 @@ import { registerConfirmationRoutes } from "./routes/confirmations.js";
 import { registerMessageRoutes } from "./routes/messages.js";
 import { registerCertificationRoutes } from "./routes/certifications.js";
 import { registerIncidentRoutes } from "./routes/incidents.js";
+import { registerPatrolRoutes } from "./routes/patrols.js";
 import { registerUiRoutes } from "./routes/ui.js";
 import { registerTimeclockConfirmationExecutor } from "../domain/timeclock.js";
 
@@ -41,6 +42,7 @@ export function buildFacadeServer(): Server {
   registerMessageRoutes(router);
   registerCertificationRoutes(router);
   registerIncidentRoutes(router);
+  registerPatrolRoutes(router);
   registerUiRoutes(router);
 
   return createServer((req, res) => {
