@@ -43,6 +43,19 @@ const HTML = `<!doctype html>
   <h2>Pending approvals</h2>
   <table id="pendingTable"><thead><tr><th>Summary</th><th>Submitted</th><th></th></tr></thead><tbody></tbody></table>
 
+  <h2>Send message (supervisors only)</h2>
+  <div>
+    <select id="recipientSelect"><option value="">-- direct message to guard --</option></select>
+    <input id="siteIdInput" placeholder="or site id to broadcast to everyone on duty there" size="36">
+    <br>
+    <textarea id="messageBody" rows="2" cols="50" placeholder="Message text"></textarea>
+    <br>
+    <button id="sendBtn">Send / Broadcast</button>
+  </div>
+
+  <h2>My inbox</h2>
+  <table id="inboxTable"><thead><tr><th>From site</th><th>Message</th><th>Received</th><th></th></tr></thead><tbody></tbody></table>
+
 <script src="/app.js"></script>
 </body>
 </html>`;
@@ -76,8 +89,14 @@ async function login() {
   }
 }
 
+// A plain guard's token is valid but not a supervisor -- /guards/on-duty
+// and /confirmations/pending correctly 403 for them (requireSupervisor),
+// while /messages/inbox works for anyone. Each section refreshes
+// independently so a guard login still sees their own inbox instead of
+// the whole page failing on the first 403.
 async function refresh() {
   if (!token) return;
+
   try {
     const { guards } = await api('/guards/on-duty');
     const rosterBody = document.querySelector('#rosterTable tbody');
@@ -87,6 +106,16 @@ async function refresh() {
       (g.on_duty_site_id ? 'On duty' : 'Off duty') + '</span></td></tr>'
     ).join('');
 
+    const recipientSelect = document.getElementById('recipientSelect');
+    const currentValue = recipientSelect.value;
+    recipientSelect.innerHTML = '<option value="">-- direct message to guard --</option>' +
+      guards.map((g) => '<option value="' + g.id + '">' + g.name + ' (' + g.role + ')</option>').join('');
+    recipientSelect.value = currentValue;
+  } catch (err) {
+    setStatus('Roster unavailable: ' + err.message);
+  }
+
+  try {
     const { pending } = await api('/confirmations/pending');
     const pendingBody = document.querySelector('#pendingTable tbody');
     pendingBody.innerHTML = pending.map((p) =>
@@ -95,23 +124,62 @@ async function refresh() {
       '<button data-reject="' + p.id + '">Reject</button></td></tr>'
     ).join('');
   } catch (err) {
-    setStatus('Refresh failed: ' + err.message);
+    // Expected for a non-supervisor login -- don't overwrite roster's status.
+  }
+
+  try {
+    const { messages } = await api('/messages/inbox');
+    const inboxBody = document.querySelector('#inboxTable tbody');
+    inboxBody.innerHTML = messages.map((m) =>
+      '<tr><td>' + (m.site_id || '--') + '</td><td>' + m.body + '</td><td>' + new Date(m.created_at).toLocaleString() + '</td><td>' +
+      (m.read_at ? 'read' : '<button data-read="' + m.id + '">Mark read</button>') + '</td></tr>'
+    ).join('');
+  } catch (err) {
+    setStatus('Inbox unavailable: ' + err.message);
+  }
+}
+
+async function sendOrBroadcast() {
+  const recipientId = document.getElementById('recipientSelect').value;
+  const siteId = document.getElementById('siteIdInput').value.trim();
+  const body = document.getElementById('messageBody').value.trim();
+  if (!body) return;
+  try {
+    if (siteId) {
+      const result = await api('/messages/broadcast', { method: 'POST', body: JSON.stringify({ siteId, body }) });
+      setStatus('Broadcast sent to ' + result.sentCount + ' guard(s) on duty at that site.');
+    } else if (recipientId) {
+      await api('/messages/send', { method: 'POST', body: JSON.stringify({ recipientId, body }) });
+      setStatus('Message sent.');
+    } else {
+      setStatus('Pick a recipient or enter a site id to broadcast.');
+      return;
+    }
+    document.getElementById('messageBody').value = '';
+    await refresh();
+  } catch (err) {
+    setStatus('Send failed: ' + err.message);
   }
 }
 
 document.addEventListener('click', async (e) => {
   const approveId = e.target.getAttribute && e.target.getAttribute('data-approve');
   const rejectId = e.target.getAttribute && e.target.getAttribute('data-reject');
+  const readId = e.target.getAttribute && e.target.getAttribute('data-read');
   if (approveId) {
     await api('/confirmations/' + approveId + '/approve', { method: 'POST', body: '{}' });
     await refresh();
   } else if (rejectId) {
     await api('/confirmations/' + rejectId + '/reject', { method: 'POST', body: '{}' });
     await refresh();
+  } else if (readId) {
+    await api('/messages/' + readId + '/read', { method: 'POST', body: '{}' });
+    await refresh();
   }
 });
 
 document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('sendBtn').addEventListener('click', sendOrBroadcast);
 setInterval(refresh, 10000);
 `;
 
