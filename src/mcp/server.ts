@@ -7,6 +7,7 @@ import { registerTimeclockTools } from "./tools/timeclock.js";
 import { registerConfirmationTools } from "./tools/confirmations.js";
 import { registerMessageTools } from "./tools/messages.js";
 import { registerCertificationTools } from "./tools/certifications.js";
+import { registerIncidentTools } from "./tools/incidents.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "ironhorse", version: "0.1.0" });
@@ -18,6 +19,7 @@ export function buildMcpServer(): McpServer {
   registerConfirmationTools(server);
   registerMessageTools(server);
   registerCertificationTools(server);
+  registerIncidentTools(server);
   return server;
 }
 
