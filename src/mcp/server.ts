@@ -1,9 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { registerIdentityTools } from "./tools/identity.js";
+import { registerSiteTools } from "./tools/sites.js";
+import { registerGuardTools } from "./tools/guards.js";
+import { registerShiftTools } from "./tools/shifts.js";
+import { registerTimeclockTools } from "./tools/timeclock.js";
+import { registerConfirmationTools } from "./tools/confirmations.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "ironhorse", version: "0.1.0" });
   registerIdentityTools(server);
+  registerSiteTools(server);
+  registerGuardTools(server);
+  registerShiftTools(server);
+  registerTimeclockTools(server); // also registers the timeclock_event confirmation executor
+  registerConfirmationTools(server);
   return server;
 }
 
