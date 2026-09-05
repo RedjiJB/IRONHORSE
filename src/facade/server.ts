@@ -19,6 +19,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerGuardRoutes } from "./routes/guards.js";
 import { registerConfirmationRoutes } from "./routes/confirmations.js";
 import { registerMessageRoutes } from "./routes/messages.js";
+import { registerCertificationRoutes } from "./routes/certifications.js";
 import { registerUiRoutes } from "./routes/ui.js";
 import { registerTimeclockConfirmationExecutor } from "../domain/timeclock.js";
 
@@ -37,6 +38,7 @@ export function buildFacadeServer(): Server {
   registerGuardRoutes(router);
   registerConfirmationRoutes(router);
   registerMessageRoutes(router);
+  registerCertificationRoutes(router);
   registerUiRoutes(router);
 
   return createServer((req, res) => {

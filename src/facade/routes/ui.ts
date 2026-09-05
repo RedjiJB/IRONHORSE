@@ -56,6 +56,9 @@ const HTML = `<!doctype html>
   <h2>My inbox</h2>
   <table id="inboxTable"><thead><tr><th>From site</th><th>Message</th><th>Received</th><th></th></tr></thead><tbody></tbody></table>
 
+  <h2>Compliance -- expiring/expired certifications (supervisors only)</h2>
+  <table id="complianceTable"><thead><tr><th>Guard</th><th>Cert type</th><th>Expires</th><th>Status</th></tr></thead><tbody></tbody></table>
+
 <script src="/app.js"></script>
 </body>
 </html>`;
@@ -136,6 +139,21 @@ async function refresh() {
     ).join('');
   } catch (err) {
     setStatus('Inbox unavailable: ' + err.message);
+  }
+
+  try {
+    const [{ certifications: expiring }, { certifications: expired }] = await Promise.all([
+      api('/compliance/expiring-certifications?daysAhead=30'),
+      api('/compliance/expired-certifications'),
+    ]);
+    const complianceBody = document.querySelector('#complianceTable tbody');
+    const rows = expired.map((c) => ({ ...c, statusLabel: 'EXPIRED' }))
+      .concat(expiring.map((c) => ({ ...c, statusLabel: 'expiring soon' })));
+    complianceBody.innerHTML = rows.map((c) =>
+      '<tr><td>' + c.guard_name + '</td><td>' + c.cert_type + '</td><td>' + c.expires_at + '</td><td>' + c.statusLabel + '</td></tr>'
+    ).join('');
+  } catch (err) {
+    // Expected for a non-supervisor login.
   }
 }
 

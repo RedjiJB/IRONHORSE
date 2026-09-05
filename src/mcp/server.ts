@@ -6,6 +6,7 @@ import { registerShiftTools } from "./tools/shifts.js";
 import { registerTimeclockTools } from "./tools/timeclock.js";
 import { registerConfirmationTools } from "./tools/confirmations.js";
 import { registerMessageTools } from "./tools/messages.js";
+import { registerCertificationTools } from "./tools/certifications.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "ironhorse", version: "0.1.0" });
@@ -16,6 +17,7 @@ export function buildMcpServer(): McpServer {
   registerTimeclockTools(server); // also registers the timeclock_event confirmation executor
   registerConfirmationTools(server);
   registerMessageTools(server);
+  registerCertificationTools(server);
   return server;
 }
 
