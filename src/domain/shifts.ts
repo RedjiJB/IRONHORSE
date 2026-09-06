@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
 
-export type ShiftStatus = "assigned" | "confirmed" | "declined" | "no_show";
+export type ShiftStatus = "assigned" | "confirmed" | "declined" | "no_show" | "reassigned";
 
 export type Shift = {
   id: string;
@@ -12,6 +12,7 @@ export type Shift = {
   status: ShiftStatus;
   post_id: string | null;
   created_at: string;
+  reassigned_from_shift_id: string | null;
 };
 
 // postId is optional -- a shift not tied to a post works exactly as it
@@ -43,6 +44,59 @@ export async function confirmShift(shiftId: string, decision: "confirmed" | "dec
     [shiftId, decision],
   );
   return (result.rows[0] as Shift) ?? null;
+}
+
+export type ReassignShiftResult =
+  | { ok: true; oldShift: Shift; newShift: Shift }
+  | { ok: false; reason: "shift_not_found" | "shift_already_reassigned" };
+
+// Override/reassign shift on the fly (FEATURES.md §3). Marks the
+// outgoing shift 'no_show' or 'reassigned' -- the caller's call which
+// applies, see 0019_shift_reassignment.sql's header -- and creates a
+// fresh shift for the replacement guard at the same site/date/time/post,
+// linked back via reassigned_from_shift_id for an audit trail. Like
+// equipment.ts's checkOutEquipment, transactional with a row lock on the
+// outgoing shift so two supervisors can't both reassign the same one out
+// from under each other. Compliance checking (DOMAIN-DESIGN.md §5, soft
+// flag) is the caller's job when newShift.post_id is set, same layering
+// assignShift already uses -- this function never blocks on it.
+export async function reassignShift(args: {
+  shiftId: string;
+  newGuardId: string;
+  outgoingStatus: "no_show" | "reassigned";
+}): Promise<ReassignShiftResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const outgoingRow = await client.query("SELECT * FROM shifts WHERE id = $1 FOR UPDATE", [args.shiftId]);
+    const outgoing = outgoingRow.rows[0] as Shift | undefined;
+    if (!outgoing) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "shift_not_found" };
+    }
+    if (outgoing.status === "no_show" || outgoing.status === "reassigned") {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "shift_already_reassigned" };
+    }
+
+    const updatedOutgoing = await client.query(
+      `UPDATE shifts SET status = $2 WHERE id = $1 RETURNING *`,
+      [args.shiftId, args.outgoingStatus],
+    );
+    const newShiftRow = await client.query(
+      `INSERT INTO shifts (guard_id, site_id, date, start_time, end_time, post_id, reassigned_from_shift_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [args.newGuardId, outgoing.site_id, outgoing.date, outgoing.start_time, outgoing.end_time, outgoing.post_id, outgoing.id],
+    );
+    await client.query("COMMIT");
+    return { ok: true, oldShift: updatedOutgoing.rows[0] as Shift, newShift: newShiftRow.rows[0] as Shift };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function listShifts(filter?: { guardId?: string; siteId?: string; date?: string; status?: ShiftStatus }): Promise<Shift[]> {

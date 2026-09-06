@@ -139,7 +139,20 @@ clone.
       missed-checkpoint alerting and the duress re-page escalation timer,
       not scoped into this first cut.
 - [ ] Site visit / spot-check logging (supervisor's own geofenced check-in)
-- [ ] Override/reassign shift on the fly (no-show handling)
+- [x] Override/reassign shift on the fly (no-show handling): migration
+      0019 adds a `reassigned` shift status (distinct from `no_show` --
+      an override also covers a supervisor proactively swapping guards
+      for reasons that aren't the outgoing guard's fault) and
+      `shifts.reassigned_from_shift_id` for an audit trail. A new
+      `reassignShift` in `shifts.ts` marks the outgoing shift out and
+      creates a fresh shift for the replacement guard at the same
+      site/date/time/post, transactional with a row lock so two
+      supervisors can't reassign the same shift out from under each
+      other. The precedent's trigger for this
+      (`exceptions.ts`'s `delay` alert) is a poller this pruned tree
+      doesn't have -- same gap as the other flagged pollers -- so this
+      ships the manual override/reassign action itself, not automatic
+      no-show detection.
 - [ ] Multi-language incident input
 
 ## Phase 3 — Business platform
