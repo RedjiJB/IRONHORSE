@@ -1,13 +1,11 @@
 // Push-to-guard messaging/broadcast (FEATURES.md §3). Direct
 // person-to-person messages and site broadcasts share one table, one row
-// per recipient -- see 0011_messages.sql for why. This module only owns
-// the message mechanics (send/broadcast/inbox/mark-read); who is allowed
-// to send is an MCP-tool/façade-layer capability check (supervisor-only
-// for now), not enforced here, so a future guard-facing "contact
-// supervisor" feature (FEATURES.md §2, Phase 2) can reuse sendMessage
-// without this module needing to know about that direction too.
+// per recipient -- see 0011_messages.sql for why. Sending/broadcasting is
+// an MCP-tool/façade-layer capability check (supervisor-only), not
+// enforced here -- contactSupervisor below is the guard-facing direction
+// this module's send/broadcast mechanics were always meant to serve too.
 import { pool } from "../db/pool.js";
-import { listGuardsWithOnDutyStatus } from "./guards.js";
+import { listActiveSupervisorsAndAdmins, listGuardsWithOnDutyStatus } from "./guards.js";
 
 export type Message = {
   id: string;
@@ -40,6 +38,23 @@ export async function broadcastToSite(args: { senderId: string; siteId: string; 
   const sent: Message[] = [];
   for (const guard of recipients) {
     sent.push(await sendMessage({ senderId: args.senderId, recipientId: guard.id, body: args.body, siteId: args.siteId }));
+  }
+  return sent;
+}
+
+// Guard-facing "contact supervisor" button (FEATURES.md §2, Phase 2) --
+// the reuse this module's own header comment anticipated. Pages every
+// active supervisor/admin system-wide, same targeting
+// duress.ts's triggerDuressAlert uses (DOMAIN-DESIGN.md §3's documented
+// simplification: broader net than "supervisors overseeing this site"
+// until site-level supervisor assignment exists). Unlike duress, this is
+// an ordinary message, not a forced-critical incident -- a guard reaching
+// out for help or to report something isn't automatically a silent alarm.
+export async function contactSupervisor(args: { guardId: string; siteId?: string; body: string }): Promise<Message[]> {
+  const supervisors = await listActiveSupervisorsAndAdmins();
+  const sent: Message[] = [];
+  for (const supervisor of supervisors) {
+    sent.push(await sendMessage({ senderId: args.guardId, recipientId: supervisor.id, siteId: args.siteId ?? null, body: args.body }));
   }
   return sent;
 }

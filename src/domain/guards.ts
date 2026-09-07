@@ -100,6 +100,17 @@ export async function listGuards(filter?: { role?: GuardRole; active?: boolean }
   return result.rows as Guard[];
 }
 
+// Shared by duress.ts's triggerDuressAlert and messages.ts's
+// contactSupervisor -- both page every active supervisor/admin
+// system-wide, the documented simplification (DOMAIN-DESIGN.md §3) for
+// "every supervisor overseeing that site" until site-level supervisor
+// assignment exists.
+export async function listActiveSupervisorsAndAdmins(): Promise<Guard[]> {
+  return (await listGuards({ role: "supervisor", active: true })).concat(
+    await listGuards({ role: "admin", active: true }),
+  );
+}
+
 export async function getGuard(id: string): Promise<Guard | null> {
   const result = await pool.query("SELECT * FROM guards WHERE id = $1", [id]);
   return (result.rows[0] as Guard) ?? null;

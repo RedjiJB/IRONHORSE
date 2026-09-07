@@ -27,8 +27,16 @@ export type Incident = {
   lng: number | null;
   created_at: string;
   resolved_at: string | null;
+  language: string;
+  translated_summary: string | null;
+  translated_by_guard_id: string | null;
+  translated_at: string | null;
 };
 
+// language defaults to 'en' when omitted -- the guard app is expected to
+// send the guard's actual reporting language once it has one to send;
+// this never guesses at translation, per 0021_incident_language.sql's
+// resolved scope.
 export async function reportIncident(args: {
   siteId: string;
   reportedByGuardId: string;
@@ -37,14 +45,35 @@ export async function reportIncident(args: {
   summary: string;
   lat?: number | null;
   lng?: number | null;
+  language?: string;
 }): Promise<Incident> {
   const result = await pool.query(
-    `INSERT INTO incidents (site_id, reported_by_guard_id, category, severity, summary, lat, lng)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO incidents (site_id, reported_by_guard_id, category, severity, summary, lat, lng, language)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [args.siteId, args.reportedByGuardId, args.category, args.severity, args.summary, args.lat ?? null, args.lng ?? null],
+    [args.siteId, args.reportedByGuardId, args.category, args.severity, args.summary, args.lat ?? null, args.lng ?? null, args.language ?? "en"],
   );
   return result.rows[0] as Incident;
+}
+
+export type TranslateIncidentResult = { ok: true; incident: Incident } | { ok: false; reason: "incident_not_found" };
+
+// A direct mutation, not an incident_actions row -- see
+// 0021_incident_language.sql's header for why this doesn't need the
+// append-only treatment severity gets. Overwrites any prior translation
+// rather than versioning it; if that turns out to matter, revisit then.
+export async function translateIncident(args: {
+  incidentId: string;
+  translatedByGuardId: string;
+  translatedSummary: string;
+}): Promise<TranslateIncidentResult> {
+  const result = await pool.query(
+    `UPDATE incidents SET translated_summary = $2, translated_by_guard_id = $3, translated_at = now()
+     WHERE id = $1 RETURNING *`,
+    [args.incidentId, args.translatedSummary, args.translatedByGuardId],
+  );
+  if (!result.rows[0]) return { ok: false, reason: "incident_not_found" };
+  return { ok: true, incident: result.rows[0] as Incident };
 }
 
 export async function listIncidents(filter?: { siteId?: string; status?: IncidentStatus }): Promise<Incident[]> {

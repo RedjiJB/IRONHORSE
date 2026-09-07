@@ -16,6 +16,7 @@ import {
   listIncidentActions,
   listIncidents,
   reportIncident,
+  translateIncident,
 } from "../../domain/incidents.js";
 import { triggerDuressAlert } from "../../domain/duress.js";
 import { getQueryParam } from "../context.js";
@@ -32,6 +33,7 @@ export function registerIncidentRoutes(router: Router): void {
         summary?: string;
         lat?: number;
         lng?: number;
+        language?: string;
       }>(req);
       if (!body.siteId || !body.reportedByGuardId || !body.category || !body.severity || !body.summary) {
         sendJson(res, 400, { detail: "siteId, reportedByGuardId, category, severity, and summary are required" });
@@ -45,6 +47,7 @@ export function registerIncidentRoutes(router: Router): void {
         summary: body.summary,
         lat: body.lat,
         lng: body.lng,
+        language: body.language,
       });
       sendJson(res, 200, { incident });
     } catch (err) {
@@ -100,6 +103,34 @@ export function registerIncidentRoutes(router: Router): void {
         newSeverity: body.newSeverity,
       });
       sendJson(res, 200, { action });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  // Client-facing translation (FEATURES.md §2) -- a supervisor fills
+  // this in by hand, no auto-translate wired up (see
+  // 0021_incident_language.sql). Any authenticated caller, same as
+  // /incidents/:id/actions above -- not tightened to supervisor-only for
+  // the same reasoning that route already documents.
+  router.post("/incidents/:id/translate", async (req, res, params) => {
+    try {
+      const actor = await requireBearerToken(req);
+      const body = await readJsonBody<{ translatedSummary?: string }>(req);
+      if (!body.translatedSummary) {
+        sendJson(res, 400, { detail: "translatedSummary is required" });
+        return;
+      }
+      const result = await translateIncident({
+        incidentId: params.id,
+        translatedByGuardId: actor.userId,
+        translatedSummary: body.translatedSummary,
+      });
+      if (!result.ok) {
+        sendJson(res, 404, { detail: result.reason });
+        return;
+      }
+      sendJson(res, 200, { incident: result.incident });
     } catch (err) {
       sendError(res, err);
     }
