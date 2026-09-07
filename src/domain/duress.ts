@@ -20,7 +20,7 @@
 // follow-up work (an exceptions.ts-style poller, per
 // PRECEDENT-ARCHITECTURE.md §6), not scoped into this first cut.
 import { reportIncident, type Incident } from "./incidents.js";
-import { listGuards } from "./guards.js";
+import { listActiveSupervisorsAndAdmins } from "./guards.js";
 import { sendMessage } from "./messages.js";
 
 export type DuressAlertResult = { incident: Incident; supervisorsPaged: number };
@@ -41,9 +41,7 @@ export async function triggerDuressAlert(args: {
     lng: args.lng,
   });
 
-  const supervisors = (await listGuards({ role: "supervisor", active: true })).concat(
-    await listGuards({ role: "admin", active: true }),
-  );
+  const supervisors = await listActiveSupervisorsAndAdmins();
 
   let paged = 0;
   for (const supervisor of supervisors) {

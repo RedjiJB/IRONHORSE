@@ -5,7 +5,7 @@
 import type { Router } from "../router.js";
 import { readJsonBody, sendError, sendJson } from "../context.js";
 import { requireBearerToken, requireSupervisor } from "../auth.js";
-import { broadcastToSite, listInbox, markMessageRead, sendMessage } from "../../domain/messages.js";
+import { broadcastToSite, contactSupervisor, listInbox, markMessageRead, sendMessage } from "../../domain/messages.js";
 
 export function registerMessageRoutes(router: Router): void {
   router.post("/messages/send", async (req, res) => {
@@ -33,6 +33,23 @@ export function registerMessageRoutes(router: Router): void {
       }
       const messages = await broadcastToSite({ senderId: sender.userId, siteId: body.siteId, body: body.body });
       sendJson(res, 200, { sentCount: messages.length, messages });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  // Guard-facing "contact supervisor" (FEATURES.md §2) -- any
+  // authenticated guard, not supervisor-only like send/broadcast above.
+  router.post("/messages/contact-supervisor", async (req, res) => {
+    try {
+      const guard = await requireBearerToken(req);
+      const body = await readJsonBody<{ siteId?: string; body?: string }>(req);
+      if (!body.body) {
+        sendJson(res, 400, { detail: "body is required" });
+        return;
+      }
+      const messages = await contactSupervisor({ guardId: guard.userId, siteId: body.siteId, body: body.body });
+      sendJson(res, 200, { pagedCount: messages.length, messages });
     } catch (err) {
       sendError(res, err);
     }

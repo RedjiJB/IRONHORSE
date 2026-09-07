@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
-import { broadcastToSite, listInbox, markMessageRead, sendMessage } from "../../domain/messages.js";
+import { broadcastToSite, contactSupervisor, listInbox, markMessageRead, sendMessage } from "../../domain/messages.js";
 import { requireCapability } from "../middleware.js";
 import { credentialArg, deniedResult } from "./shared.js";
 
@@ -44,6 +44,30 @@ export function registerMessageTools(server: McpServer): void {
       try {
         await requireCapability(credentialJwt, "mcp:tool:broadcast_to_site", 2);
         const messages = await broadcastToSite({ senderId, siteId, body });
+        return { content: [{ type: "text", text: JSON.stringify(messages) }] };
+      } catch (err) {
+        return deniedResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "contact_supervisor",
+    {
+      title: "Contact Supervisor",
+      description:
+        "A guard pages every active supervisor/admin system-wide (same targeting as trigger_duress_alert) -- an ordinary message, not a forced-critical incident. Minimum tier: 1.",
+      inputSchema: z.object({
+        ...credentialArg,
+        guardId: z.string().uuid(),
+        siteId: z.string().uuid().optional(),
+        body: z.string(),
+      }),
+    },
+    async ({ credentialJwt, ...args }) => {
+      try {
+        await requireCapability(credentialJwt, "mcp:tool:contact_supervisor", 1);
+        const messages = await contactSupervisor(args);
         return { content: [{ type: "text", text: JSON.stringify(messages) }] };
       } catch (err) {
         return deniedResult(err);

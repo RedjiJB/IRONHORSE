@@ -93,11 +93,16 @@ clone.
       ([RedjiJB/IRONHORSE#6](https://github.com/RedjiJB/IRONHORSE/pull/6)).
       `incident_media` (photos) intentionally not built -- depends on a
       `documents.ts` storage layer this pruned tree doesn't have yet.
-- [ ] Contact-supervisor button: no dedicated route yet -- `/messages/send`
-      is still supervisor-only (`requireSupervisor`), so a guard can't
-      directly message a supervisor through the façade today even though
-      `messages.ts`'s own module comment flags this as a direct reuse once
-      built.
+- [x] Contact-supervisor button: `messages.ts`'s new `contactSupervisor`
+      (`POST /messages/contact-supervisor`, any authenticated guard, no
+      `requireSupervisor` gate) -- the direct `sendMessage` reuse that
+      module's own header comment always anticipated. Pages every active
+      supervisor/admin system-wide, same targeting as
+      `triggerDuressAlert` -- factored out to `guards.ts`'s new
+      `listActiveSupervisorsAndAdmins` so both share the one
+      implementation rather than duplicating the "supervisors ++ admins"
+      query. Unlike duress, this is an ordinary message, not a
+      forced-critical incident.
 - [ ] Duress/panic button — software side shipped as part of PR #6:
       `duress.ts`'s `triggerDuressAlert` (a `category = 'duress'`,
       `severity = 'critical'` incident, location+timestamp-only payload,
@@ -161,7 +166,17 @@ clone.
       doesn't have -- same gap as the other flagged pollers -- so this
       ships the manual override/reassign action itself, not automatic
       no-show detection.
-- [ ] Multi-language incident input
+- [x] Multi-language incident input: migration 0021 adds `incidents.language`
+      (what the guard actually wrote the summary in, defaults `'en'`) and
+      a nullable `translated_summary`/`translated_by_guard_id`/`translated_at`
+      a supervisor fills in by hand via the new `translateIncident` --
+      resolved scope is data model only, no auto-translate wired up (that
+      needs an external API or a self-hosted translation service, neither
+      of which exists here yet -- same category of open sovereignty-tier
+      question as the still-blocked Avigilon Cloud camera path).
+      `translated_summary` is a direct mutation, not routed through
+      `incident_actions`, same reasoning already documented for why
+      `status` (unlike `severity`) updates directly.
 
 ## Phase 3 — Business platform
 

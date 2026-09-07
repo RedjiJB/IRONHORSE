@@ -7,6 +7,7 @@ import {
   listIncidentActions,
   listIncidents,
   reportIncident,
+  translateIncident,
 } from "../../domain/incidents.js";
 import { triggerDuressAlert } from "../../domain/duress.js";
 import { requireCapability } from "../middleware.js";
@@ -31,6 +32,7 @@ export function registerIncidentTools(server: McpServer): void {
         summary: z.string(),
         lat: z.number().optional(),
         lng: z.number().optional(),
+        language: z.string().optional(),
       }),
     },
     async ({ credentialJwt, ...args }) => {
@@ -120,6 +122,31 @@ export function registerIncidentTools(server: McpServer): void {
         await requireCapability(credentialJwt, "mcp:tool:list_incident_actions", 0);
         const actions = await listIncidentActions(incidentId);
         return { content: [{ type: "text", text: JSON.stringify(actions) }] };
+      } catch (err) {
+        return deniedResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "translate_incident",
+    {
+      title: "Translate Incident",
+      description:
+        "Records a client-facing translated summary for an incident, filled in by hand -- no auto-translate wired up. A direct mutation, not an append-only action. Minimum tier: 1.",
+      inputSchema: z.object({
+        ...credentialArg,
+        incidentId: z.string().uuid(),
+        translatedByGuardId: z.string().uuid(),
+        translatedSummary: z.string(),
+      }),
+    },
+    async ({ credentialJwt, ...args }) => {
+      try {
+        await requireCapability(credentialJwt, "mcp:tool:translate_incident", 1);
+        const result = await translateIncident(args);
+        if (!result.ok) return { content: [{ type: "text", text: `Failed: ${result.reason}` }], isError: true };
+        return { content: [{ type: "text", text: JSON.stringify(result.incident) }] };
       } catch (err) {
         return deniedResult(err);
       }
