@@ -138,7 +138,15 @@ clone.
       poller is the same category of follow-up work as patrols'
       missed-checkpoint alerting and the duress re-page escalation timer,
       not scoped into this first cut.
-- [ ] Site visit / spot-check logging (supervisor's own geofenced check-in)
+- [x] Site visit / spot-check logging (supervisor's own geofenced
+      check-in): `site_visits` (migration 0020) and a new `siteVisits.ts`
+      module, directly reusing `timeclock.ts`'s `resolveGeofenceVerified`.
+      A direct insert, not routed through `pending_confirmations` like a
+      guard's own timeclock event -- a guard's clock-in needs a
+      supervisor to review it (an interested party self-reporting), but a
+      supervisor logging their own spot-check has no analogous second
+      party to approve it, same trust level as a guard's own checkpoint
+      scan.
 - [x] Override/reassign shift on the fly (no-show handling): migration
       0019 adds a `reassigned` shift status (distinct from `no_show` --
       an override also covers a supervisor proactively swapping guards

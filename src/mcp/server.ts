@@ -13,6 +13,7 @@ import { registerPostTools } from "./tools/posts.js";
 import { registerEquipmentTools } from "./tools/equipment.js";
 import { registerHandoffNoteTools } from "./tools/handoffNotes.js";
 import { registerLoneWorkerTools } from "./tools/loneWorker.js";
+import { registerSiteVisitTools } from "./tools/siteVisits.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "ironhorse", version: "0.1.0" });
@@ -30,6 +31,7 @@ export function buildMcpServer(): McpServer {
   registerEquipmentTools(server); // also registers the equipment_return confirmation executor
   registerHandoffNoteTools(server);
   registerLoneWorkerTools(server);
+  registerSiteVisitTools(server);
   return server;
 }
 
